@@ -164,17 +164,17 @@ class Floor(object):
         return height
 
 
-    def draw(self, ax = None, both_labels=True):
-        if ax == None:
+    def draw(self, ax = None, both_labels=True, text=True, text_size=10):
+        if ax is None:
             ax = plt.subplot(111)
 
         patches = []
         annots = []
         for ii, rr in enumerate(self._rooms):
-            x = rr.getx()
-            y = rr.gety()
-            w = rr.get_width()
-            h = rr.get_height()
+            x = rr.getx() * 64
+            y = rr.gety() * 64
+            w = rr.get_width() * 64
+            h = rr.get_height() * 64
             coords = [[x, y],
                       [x+w, y],
                       [x+w, y+h],
@@ -188,29 +188,30 @@ class Floor(object):
                        )
             )
 
-            x_middle = x + w * 0.5
-            y_middle = y + h * 0.5
-            label_string = '\textbf{' + str(ii) + '}'
-            label_string += ', \textsc{' + self._names[rr.get_class()] + '}'
+            if text:
+                x_middle = x + w * 0.5
+                y_middle = y + h * 0.5
+                label_string = '\textbf{' + str(ii) + '}'
+                label_string += ', \textsc{' + self._names[rr.get_class()] + '}'
 
-            color = 'white' if not rr.get_class() == 5 else 'black'
-            text = plt.text(x_middle, y_middle,
-                             label_string.encode('unicode-escape').decode(),
-                            {'color': color,
-                             'fontsize': 10,
-                             'ha': 'center',
-                             'va': 'center',
-                             'bbox':{
-                                    'boxstyle':'round',
-                                    'fc': self._get_color(rr.get_class(), 0.8),
-                                    'ec': self._get_color(rr.get_class(), 1.0),
-                                    'pad':0.25
-                             }
-                             },
-                            usetex=True,
-                            # transform=ax.transAxes
-                            )
-            ax.add_artist(text)
+                color = 'white' if not rr.get_class() == 5 else 'black'
+                text = plt.text(x_middle, y_middle,
+                                 label_string.encode('unicode-escape').decode(),
+                                {'color': color,
+                                 'fontsize': text_size,
+                                 'ha': 'center',
+                                 'va': 'center',
+                                 'bbox':{
+                                        'boxstyle':'round',
+                                        'fc': self._get_color(rr.get_class(), 0.8),
+                                        'ec': self._get_color(rr.get_class(), 1.0),
+                                        'pad':0.25
+                                 }
+                                 },
+                                usetex=True,
+                                # transform=ax.transAxes
+                                )
+                ax.add_artist(text)
 
         p = PatchCollection(patches, match_original=True)
 
@@ -223,8 +224,8 @@ class Floor(object):
             ax_h = ax.twiny()
             ax_v = ax.twinx()
             axes = [ax, ax_h, ax_v]
-
-        axes = [ax]
+        else:
+            axes = [ax]
 
         for curr_ax in axes:
             curr_ax.tick_params(axis='both', which='major', labelsize=16)
@@ -255,19 +256,26 @@ class LPSolver(object):
         self.bbox_height = self._model.addMVar(shape=1, lb=0.0, vtype=GRB.CONTINUOUS, name='bbox_height')
         self.summer = np.ones((self._n_vars))
         self._min_sep = 0
+        self.lines_align = False
 
     def __repr__(self):
         pass
 
+    def same_line_constraints(self):
+        self.lines_align = True
+
     def get_floor(self):
         return floor
 
-    def solve(self, mode, iter):
+    def solve(self, mode, iter=None):
         # self._model.setObjective(self.summer.T @ self.widths + self.summer.T @ self.heights, GRB.MINIMIZE)
         self._model.setObjective(self.bbox_width + self.bbox_height, GRB.MINIMIZE)
 
         self._read_graph()
-        self._model.setParam(GRB.Param.BarIterLimit, iter)
+        if iter is not None:
+            self._model.setParam(GRB.Param.BarIterLimit, iter)
+            self._model.setParam(GRB.Param.IterationLimit, iter)
+
         try:
             self._model.optimize()
 
@@ -294,24 +302,36 @@ class LPSolver(object):
         for ii, e in enumerate(self._floor.horiz_constraints.edges):
             l = e[0]
             r = e[1]
-            self._model.addConstr(self.xlocs[l] + self.widths[l] <= self.xlocs[r] - self._min_sep, name=f'horiz_{ii}')
+            if self.lines_align:
+                self._model.addConstr(self.xlocs[l] + self.widths[l] == self.xlocs[r], name=f'horiz_{ii}')
+            else:
+                self._model.addConstr(self.xlocs[l] + self.widths[l] <= self.xlocs[r] - self._min_sep, name=f'horiz_{ii}')
 
 
 
         for ii, e in enumerate(self._floor.vert_constraints.edges):
             b = e[0]
             t = e[1]
-            self._model.addConstr(self.ylocs[b] + self.heights[b] <= self.ylocs[t] - self._min_sep, name=f'vert_{ii}')
+            if self.lines_align:
+                self._model.addConstr(self.ylocs[b] + self.heights[b] == self.ylocs[t],  name=f'horiz_{ii}')
+            else:
+                self._model.addConstr(self.ylocs[b] + self.heights[b] <= self.ylocs[t] - self._min_sep, name=f'vert_{ii}')
 
         # constraints for the right/top
 
         for node in self._get_all_maximal(self._floor.horiz_constraints):
             # print(self.xlocs[node])
             # print(self.bbox_width)
-            self._model.addConstr(self.xlocs[node] + self.widths[node] - self.bbox_width[0] + self._min_sep <= 0.0, name=f'h_maximal_{node}')
+            if self.lines_align:
+                self._model.addConstr(self.xlocs[node] + self.widths[node] == self.bbox_width[0] , name=f'h_maximal_{node}')
+            else:
+                self._model.addConstr(self.xlocs[node] + self.widths[node] - self.bbox_width[0] + self._min_sep <= 0.0, name=f'h_maximal_{node}')
 
         for node in self._get_all_maximal(self._floor.vert_constraints):
-            self._model.addConstr(self.ylocs[node] + self.heights[node] - self.bbox_height[0] + self._min_sep <= 0.0, name=f'v_maximal_{node}')
+            if self.lines_align:
+                self._model.addConstr(self.ylocs[node] + self.heights[node] == self.bbox_height[0] , name=f'v_maximal_{node}')
+            else:
+                self._model.addConstr(self.ylocs[node] + self.heights[node] - self.bbox_height[0] + self._min_sep <= 0.0, name=f'v_maximal_{node}')
 
         # constraints for all
 
@@ -341,9 +361,73 @@ class LPSolver(object):
         for ii, ar in enumerate(areas):
             self._model.addConstr( self.widths[ii] @ self.heights[ii] >= ar , name=f'area_{ii}')
 
-            # TODO: check if this is transitive from  maximal
-            # self._model.addConstr(self.xlocs[ii] <= 1.0, name=f'x_{ii}')
-            # self._model.addConstr(self.ylocs[ii] <= 1.0, name=f'y_{ii}')
+    def _add_width_constraints(self, widths:list, eps=0.1):
+        if not len(widths) == self._n_vars:
+            raise ValueError('The widths should be the same number as the number of rooms')
+
+        was_list = False
+        if isinstance(eps, list):
+            was_list = True
+            eps_list = eps.copy()
+            if not len(eps) == self._n_vars:
+                raise ValueError('The epsilons should have the number as rooms')
+
+        for ii, ww in enumerate(widths):
+            if was_list:
+                eps = eps_list[ii]
+            self._model.addConstr(self.widths[ii] >= widths[ii] * (1 - eps), name=f'width_min_{ii}')
+            self._model.addConstr(self.widths[ii] <= widths[ii] * (1 + eps), name=f'width_max_{ii}')
+
+    def _add_height_constraints(self, heights:list, eps=0.1):
+        if not len(heights) == self._n_vars:
+            raise ValueError('The widths should be the same number as the number of rooms')
+
+        was_list = False
+        if isinstance(eps, list):
+            was_list = True
+            eps_list = eps.copy()
+            if not len(eps) == self._n_vars:
+                raise ValueError('The epsilons should have the number as rooms')
+
+        for ii, ww in enumerate(heights):
+            if was_list:
+                eps = eps_list[ii]
+            self._model.addConstr(self.heights[ii] >= heights[ii] * (1 - eps), name=f'height_min_{ii}')
+            self._model.addConstr(self.heights[ii] <= heights[ii] * (1 + eps), name=f'height_max_{ii}')
+
+    def _add_xloc_constraints(self, xlocs:list, eps=0.1):
+        if not len(xlocs) == self._n_vars:
+            raise ValueError('The xlocs should be the same number as the number of rooms')
+
+        was_list = False
+        if isinstance(eps, list):
+            was_list = True
+            eps_list = eps.copy()
+            if not len(eps) == self._n_vars:
+                raise ValueError('The epsilons should have the number as rooms')
+
+        for ii, ww in enumerate(xlocs):
+            if was_list:
+                eps = eps_list[ii]
+            self._model.addConstr(self.xlocs[ii] >= xlocs[ii] * (1 - eps), name=f'width_min_{ii}')
+            self._model.addConstr(self.xlocs[ii] <= xlocs[ii] * (1 + eps), name=f'width_max_{ii}')
+
+    def _add_yloc_constraints(self, ylocs:list, eps=0.1):
+        if not len(ylocs) == self._n_vars:
+            raise ValueError('The widths should be the same number as the number of rooms')
+
+        was_list = False
+        if isinstance(eps, list):
+            was_list = True
+            eps_list = eps.copy()
+            if not len(eps) == self._n_vars:
+                raise ValueError('The epsilons should have the number as rooms')
+
+        for ii, ww in enumerate(ylocs):
+            if was_list:
+                eps = eps_list[ii]
+            self._model.addConstr(self.ylocs[ii] >= ylocs[ii] * (1 - eps), name=f'height_min_{ii}')
+            self._model.addConstr(self.ylocs[ii] <= ylocs[ii] * (1 + eps), name=f'height_max_{ii}')
 
 
     def _add_aligment_constraints(self):
@@ -460,9 +544,9 @@ class STNode(object):
 
     def is_hadj(self, other):
         if self.xmax == other.xmin:# or self.xmin == other.xmax:
-            if max(self.ymin, other.ymin) < min(self.ymax, other.ymax):
+            if max(self.ymin, other.ymin) <= min(self.ymax, other.ymax):
                 return True 
-            if max(other.ymin, self.ymin) < min(other.ymax, self.ymax):
+            if max(other.ymin, self.ymin) <= min(other.ymax, self.ymax):
                 return True
 
             # if self.ymax > other.ymin > self.ymin:
@@ -481,9 +565,9 @@ class STNode(object):
 
     def is_vadj(self, other):
         if self.ymax == other.ymin:# or self.ymin == other.ymax:
-            if max(self.xmin, other.xmin) < min(self.xmax, other.xmax):
+            if max(self.xmin, other.xmin) <= min(self.xmax, other.xmax):
                 return True 
-            if max(other.xmin, self.xmin) < min(other.xmax, self.xmax):
+            if max(other.xmin, self.xmin) <= min(other.xmax, self.xmax):
                 return True 
 
             # if self.xmax > other.xmin > self.xmin:
@@ -511,6 +595,12 @@ class STNode(object):
 
     def get_area(self):
         return self.aabb.get_area()
+
+    def get_width(self):
+        return self.xmax - self.xmin
+
+    def get_height(self):
+        return self.ymax - self.ymin
 
 
 
@@ -815,10 +905,11 @@ class SplittingTree(object):
 
         return self.vert_adj
 
+
     def show_graphs(self):
         f, ax = plt.subplots(1, 3, dpi=160, figsize=(4, 4), sharex=False, sharey=False)
 
-        _ = show_with_grid(self.cmap[self.idx_img], ax[0])
+        ax[0] = show_with_grid(self.cmap[self.idx_img], ax[0])
 
         patches = []
         locs = {}
@@ -871,6 +962,11 @@ class SplittingTree(object):
                                node_size=10,
                                linewidths=0.5,
                                ax=ax[1])
+        nx.draw_networkx_labels(self.horiz_adj,
+                               pos=locs,
+                               font_size=8,
+                               font_color='r',
+                               ax=ax[1])
         nx.draw_networkx_edges(self.horiz_adj,
                                pos=locs,
                                node_size=0.1,
@@ -891,6 +987,11 @@ class SplittingTree(object):
                                node_size=10,
                                linewidths=0.5,
                                ax=ax[2])
+        nx.draw_networkx_labels(self.vert_adj,
+                                pos=locs,
+                                font_size=8,
+                                font_color='red',
+                                ax=ax[2])
         nx.draw_networkx_edges(self.vert_adj,
                                pos=locs,
                                node_size=0.1,
@@ -939,7 +1040,7 @@ class SplittingTree(object):
 
         splits = np.nonzero(np.sum(threshed, axis=1))[0].ravel()
         splits = list(splits)
-        print(splits)
+        # print(splits)
 
         if self.detect_wall == 'line':
             propsective = []
@@ -980,7 +1081,7 @@ class SplittingTree(object):
         kernel = np.array([[1.0], [-1]])
         if self.grad_from == 'wall':
             gradv = ndimage.correlate(self.walls.astype(np.float), kernel)
-            self.gradv = gradh > 0
+            self.gradv = gradv > 0
 
         elif self.grad_from == 'whole':
             gradv = ndimage.correlate(self.idx_img.astype(np.float), kernel)

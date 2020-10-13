@@ -34,6 +34,21 @@ def make_rgb_indices(img, cmap):
     return mask
 
 
+def make_rgb_indices_rounding(img, cmap):
+    h, w, c = img.shape
+    mask = np.zeros((h, w))
+    nrows = cmap.shape[0]
+    colors = np.around(cmap * 255)
+    for ii in range(nrows):
+        color = tuple(colors[ii, :].ravel())
+        diff = img - color
+        diff_sqr = diff * diff
+        diff_sum_sqr = diff_sqr.sum(2)
+        hit = diff_sum_sqr < 5
+        mask[hit] = ii
+    return mask
+
+
 def show_with_grid(im, ax, size=(64, 64)):
     if isinstance(size, (int)):
         try:

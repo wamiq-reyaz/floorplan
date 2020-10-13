@@ -64,15 +64,16 @@ if __name__ == '__main__':
     # sys.exit()
 
 
-    IMG_PATH = f'/mnt/iscratch/datasets/rplan_ddg_var/0/'
+    IMG_PATH = f'/mnt/iscratch/datasets/lifull_ddg_var/00/4c/f4d6689d9d47dcbbb6efd8c2948e/'
+    IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/143/"
 
-    # IMAGES = "/mnt/iscratch/datasets/rplan_ddg_var/143/36861_0_image_nodoor.png"
+    # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/143/36861_0_image_nodoor.png"
     # #This one has stggered
-    IMAGES =   "/mnt/iscratch/datasets/rplan_ddg_var/114/29307_0_image_nodoor.png"
-    # IMAGES = natsorted(glob(IMG_PATH + '*_nodoor.png'))
+    # IMAGES =   "/mnt/iscratch/datasets/rplan_ddg_var/114/29307_0_image_nodoor.png"
+    IMAGES = natsorted(glob(IMG_PATH + '*_nodoor.png'))
 
 
-    img_pil = Image.open(IMAGES)
+    img_pil = Image.open(IMAGES[0])
     img_np = np.asarray(img_pil)
     img_idx = make_rgb_indices(img_np, rplan_map)
 
@@ -109,7 +110,7 @@ if __name__ == '__main__':
     # plt.savefig(f'{idx}_no_cross_wall.png', dpi=160)
     plt.show()
 
-    sys.exit()
+    # sys.exit()
 
     # plt.show(block=True)
 
@@ -140,34 +141,41 @@ if __name__ == '__main__':
     areas = []
     for rr in st.boxes:
         # print(rr.idx)
-        areas.append(rr.get_area()/(64.0*64))
+        # areas.append(rr.get_area() / (64.0*64))
+        areas.append(64 / (64.0*64))
         floor.add_room(Node.from_data(rr.idx, rand(), rand(), rand(), rand()))
 
     floor.add_horiz_constraints(horiz_adj.edges())
     floor.add_vert_constraints(vert_adj.edges())
+    print(vert_adj.edges())
 
     solver = LPSolver(floor)
-    solver._read_graph()
+    # solver._read_graph()
     # solver.set_min_separation(0.01)
+    solver.same_line_constraints()
     solver._add_min_area_constrains(areas)
-    f, ax = plt.subplots(1, 3, figsize=(16, 16), sharex=False, sharey=False)
+
+    # f, ax = plt.subplots(1, 3, figsize=(16, 16), sharex=False, sharey=False)
     solver.solve(mode=None, iter=13)
 
     solver._set_floor_data()
 
-    boxes = st.box_artist()
-    ax[1].add_collection(boxes)
-    ax[1].set_xlim((0, 64))
-    ax[1].set_ylim((64, 0))
-    ax[1].set_visible(True)
-    ax[1].set_aspect('equal')
+    # boxes = st.box_artist()
+    # ax[1].add_collection(boxes)
+    # ax[1].set_xlim((0, 64))
+    # ax[1].set_ylim((64, 0))
+    # ax[1].set_visible(True)
+    # ax[1].set_aspect('equal')
 
-    show_with_grid(rplan_map[img_idx.astype(np.uint8)], ax[0], 64)
+    # show_with_grid(rplan_map[img_idx.astype(np.uint8)], ax[0], 64)face_modelv_eps_m6_mlp_lr_m4
 
-    floor.draw(ax=ax[2], both_labels=False)
-    ax[2].set_xlim((0, 1))
-    ax[2].set_ylim((1, 0))
-    ax[2].set_aspect('equal')
+    ax = floor.draw(ax=None, both_labels=False)
+    # for aa in floor._rooms:
+    #     print(aa)
+    ax.set_xlim((0, 64))
+    ax.set_ylim((64, 0))
+    ax.set_visible(True)
+    ax.set_aspect('equal')
     plt.show()
 
 

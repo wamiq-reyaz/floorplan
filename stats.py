@@ -1,4 +1,4 @@
-import sys
+import os, sys
 from scipy.ndimage import binary_hit_or_miss
 from PIL import Image
 import numpy as np
@@ -11,10 +11,24 @@ import json
 from node import SplittingTree
 from utils import make_rgb_indices, rplan_map
 import networkx as nx
+from easydict import EasyDict as ED
+import pickle
 
 
 
 if __name__ == '__main__':
+    stats = ED()
+    NUM_ROOM_TYPES = rplan_map.shape[0]
+
+    stats.n_rooms = []
+    stats.widths = [[] for _ in range(NUM_ROOM_TYPES)]
+    stats.heights = [[] for _ in range(NUM_ROOM_TYPES)]
+    stats.xlocs = [[] for _ in range(NUM_ROOM_TYPES)]
+    stats.ylocs = [[] for _ in range(NUM_ROOM_TYPES)]
+    stats.hadjs = [[] for _ in range(NUM_ROOM_TYPES)]
+    stats.vadjs =  [[] for _ in range(NUM_ROOM_TYPES)]
+
+
     errors = {}
     for jj in tqdm(range(316)):
         IMG_PATH = f'/mnt/iscratch/datasets/rplan_ddg_var/{jj}/'
@@ -49,49 +63,33 @@ if __name__ == '__main__':
                 st._merge_vert_boxes(cross_wall=False)
 
             except Exception as e:
-                raise(e)
-                sys.exit()
-                bads.append(IMAGES[idx])
+                continue
+                pass
+                # raise(e)
+                # bads.append(IMAGES[idx])
 
-            horiz_adj = st.find_horiz_adj()
-            vert_adj = st.find_vert_adj()
+            # horiz_adj = st.find_horiz_adj()
+            # vert_adj = st.find_vert_adj()
 
 
             n_nodes = len(st.boxes)
-            print('number of nodes,', n_nodes)
-            print(f"{IMAGES[idx]}")
-            for ii in range(n_nodes):
-                for jj in range(ii):
-                    if ii == jj:
-                        continue
-                    else:
-                        truth = False
 
-                        # try with ii as source
-                        reachable_hii = nx.descendants(horiz_adj, ii)
-                        reachable_vii = nx.descendants(vert_adj, ii)
+            stats.n_rooms.append(n_nodes)
 
-                        reachable_ii = reachable_hii.union(reachable_vii)
-
-                        truth = truth or (jj in reachable_ii)
-
-                        # try with jj as source
-                        reachable_h = nx.descendants(horiz_adj, jj)
-                        reachable_v = nx.descendants(vert_adj, jj)
-
-                        reachable_jj = reachable_h.union(reachable_v)
-
-                        truth = truth or (ii in reachable_jj)
+            for rr in st.boxes:
+                room_type = rr.idx
+                stats.widths[room_type].append(rr.get_width())
+                stats.heights[room_type].append(rr.get_height())
+                stats.xlocs[room_type].append(rr.aabb.getx())
+                stats.ylocs[room_type].append(rr.aabb.gety())
 
 
-                        if not truth:
-                         print(ii, reachable_hii, reachable_vii)
-                         print(jj, reachable_h, reachable_v, '\n--------------')
-                         # sys.exit()
+    stats_file = './data_stats.pkl'
+    if not os.path.exists(stats_file):
+        with open(stats_file, 'wb') as fd:
+            pickle.dump(stats, fd, protocol=pickle.HIGHEST_PROTOCOL)
 
+    ## plot the stats for type 5 Living Room
+    plt.hist(stats.widths[5], bins=20)
+    plt.show()
 
-
-
-        errors[jj] = bads
-        with open('aug15_bad.json', 'w') as fp:
-            json.dump(errors, fp, indent=4)
