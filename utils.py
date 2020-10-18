@@ -2,6 +2,7 @@ from itertools import tee
 from math import ceil
 import numpy as np
 import torch
+import socket
 
 rplan_map = np.array(
     [[0.0, 0.0, 0.0],
@@ -100,6 +101,10 @@ def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
+
+def on_local():
+    if socket.gethostname() == 'PC-KW-60046':
+        return True
 
 
 
