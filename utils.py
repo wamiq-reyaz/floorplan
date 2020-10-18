@@ -15,6 +15,9 @@ rplan_map = np.array(
      [1.000000, 0.960784, 1.000000],
      [0.309804, 0.305882, 0.317647]])
 
+RPLAN_DOOR_COLOR = np.array((228, 26, 28))
+RPLAN_DOOR_COLOR = tuple(RPLAN_DOOR_COLOR.ravel())
+
 
 def colorize_rplan(preds):
     preds = torch.argmax(preds, dim=1).cpu().numpy()
@@ -33,6 +36,13 @@ def make_rgb_indices(img, cmap):
         mask[hit] = ii
     return mask
 
+def make_door_indices(img, door_color=RPLAN_DOOR_COLOR):
+    h, w, c = img.shape
+    mask = np.zeros((h, w))
+    hit = (img == door_color).all(2)
+    mask[hit] = 1
+
+    return mask
 
 def make_rgb_indices_rounding(img, cmap):
     h, w, c = img.shape
@@ -90,3 +100,6 @@ def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
+
+
+

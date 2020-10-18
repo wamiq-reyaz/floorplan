@@ -11,25 +11,31 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 
-from rplan import RrplanGraph, Flip, Rot90
+from rplan import RrplanGraph, Flip, Rot90,RrplanDoors
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
+import shutil
+from glob import glob
 
 if __name__ == '__main__':
 
-    dset = RrplanGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
+    dset = RrplanDoors(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
                  split='train',
                  seq_len=120,
-                 edg_len=100,
-                 vocab_size=65)
+                 edg_len=48,
+                 vocab_size=65,
+                 dims=5,
+                 doors='all')
 
     dloader = DataLoader(dset, batch_size=64, num_workers=10, shuffle=True)
 
-    val_set = RrplanGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
+    val_set = RrplanDoors(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
                  split='val',
                  seq_len=120,
-                 edg_len=100,
-                 vocab_size=65)
+                 edg_len=48,
+                 vocab_size=65,
+                 dims=5,
+                 doors='all')
 
     val_loader = DataLoader(val_set, batch_size=64, num_workers=10, shuffle=True)
 
@@ -46,14 +52,17 @@ if __name__ == '__main__':
 
     dec = GPT2Config(
         vocab_size=65,
-        n_positions=100,
-        n_ctx=100,
+        n_positions=48,
+        n_ctx=48,
         n_embd=264,
-        n_layer=20,
+        n_layer=12,
         n_head=12,
         is_causal=True,
         is_encoder=False
     )
+
+    # print()
+    # sys.exit()
     model = GraphGPTModel(enc, dec)
 
     model = DataParallel(model.cuda())
@@ -61,10 +70,24 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=1e-4, eps=1e-6)
     lr_scheduler = StepLR(optimizer, step_size=15, gamma=0.1)
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(comment='intial_door_model_5_tuple')
 
     global_steps = 1
     val_steps = 1
+
+    ## Basic logging
+    SAVE_LOCATION = f'./models/doors/'
+
+    code_dir = SAVE_LOCATION + 'code'
+    if not os.path.exists(SAVE_LOCATION):
+        os.makedirs(code_dir)
+
+    py_files = glob('./*.py')
+
+    for code_file in py_files:
+        shutil.copy(code_file, code_dir)
+
+
     for epochs in range(40):
         model.train()
         for steps, data in tqdm(enumerate(dloader)):
@@ -98,7 +121,16 @@ if __name__ == '__main__':
             # if steps % 100 == 0:
             writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
 
-        torch.save(model.state_dict(), f'f_20_modelv_eps_m6_mlp_lr_m4_{epochs}.pth')
+        SAVE_LOCATION = f'./models/doors/'
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_eps_m6_mlp_lr_m4_{epochs}.pth')
+
+        code_dir = SAVE_LOCATION + 'code'
+        if not os.path.exists(SAVE_LOCATION):
+            os.makedirs(code_dir)
+
+        py_files = glob()
+
+
 
 
         # torch.save(model.state_dict(), f'face_modelv_eps_m6_mlp_lr_m4_{epochs}.pth')

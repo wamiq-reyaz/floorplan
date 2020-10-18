@@ -1,4 +1,4 @@
-from utils import make_rgb_indices, rplan_map, show_with_grid
+from utils import make_rgb_indices, rplan_map, show_with_grid, make_door_indices
 from glob import glob
 from PIL import Image
 import numpy as np
@@ -71,11 +71,20 @@ if __name__ == '__main__':
     # #This one has stggered
     # IMAGES =   "/mnt/iscratch/datasets/rplan_ddg_var/114/29307_0_image_nodoor.png"
     IMAGES = natsorted(glob(IMG_PATH + '*_nodoor.png'))
+    DOOR_IMAGES = natsorted(glob(IMG_PATH + '*_image.png'))
 
 
-    img_pil = Image.open(IMAGES[0])
+    img_pil = Image.open(IMAGES[1])
     img_np = np.asarray(img_pil)
     img_idx = make_rgb_indices(img_np, rplan_map)
+
+    door_pil = Image.open(DOOR_IMAGES[1])
+    door_np = np.asarray(door_pil)
+    door_idx = make_door_indices(door_np)
+    plt.imshow(door_idx)
+    plt.show()
+    print(door_idx.shape, np.unique(door_idx))
+    # print(door_idx)
 
     # f, ax = plt.subplots(1, 3)
     # show_with_grid(rplan_map[img_idx.astype(np.uint8)], ax[0], 64)
@@ -98,7 +107,7 @@ if __name__ == '__main__':
 
     # sys.exit()
 
-    st = SplittingTree(img_idx, rplan_map, grad_from='whole')
+    st = SplittingTree(img_idx, rplan_map, grad_from='whole', door_img=door_idx)
     # st.show_grads()
     # plt.show()
     # st.split_vert = 'own'
@@ -109,6 +118,8 @@ if __name__ == '__main__':
     f, ax = st.show_boxes('merged')
     # plt.savefig(f'{idx}_no_cross_wall.png', dpi=160)
     plt.show()
+    import networkx as nx
+
 
     # sys.exit()
 
@@ -130,8 +141,11 @@ if __name__ == '__main__':
     # f, ax = st.show_horiz_graph()
     # f, ax = st.show_graphs()
 
-    #
-    # print(horiz_adj.edges())
+    aa = st.find_vert_door()
+    bb = st.find_horiz_door()
+
+    print(aa.edges())
+    print(bb.edges())
 
 
     from node import Node, Floor, LPSolver

@@ -36,10 +36,11 @@ if __name__ == '__main__':
         n_positions=200,
         n_ctx=200,
         n_embd=264,
-        n_layer=12,
+        n_layer=20,
         n_head=12,
-        is_causal=False,
-        is_encoder=True
+        is_causal=True,
+        is_encoder=False,
+        n_types=5
     )
     model = GPT2Model(config)
 
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     writer = SummaryWriter()
 
     global_steps = 1
+    val_steps = 1
     for epochs in range(40):
         model.train()
         for steps, data in tqdm(enumerate(dloader)):
@@ -62,16 +64,9 @@ if __name__ == '__main__':
 
             loss = model( input_ids=seq,
                           attention_mask=attn_mask,
-                          position_ids=pos_id)#,
-                          # labels=seq)
+                          position_ids=pos_id,
+                          labels=seq)
 
-            print(len(loss))
-            for v in loss:
-                if isinstance(v, torch.Tensor):
-                    print(v.shape)
-                else:
-                    for vv in v:
-                        print('\t', vv.shape)
             loss[0].mean().backward()
 
             optimizer.step()
@@ -79,12 +74,14 @@ if __name__ == '__main__':
             if steps % 100 == 0:
                 writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
 
-        torch.save(model.state_dict(), f'demoaug_logged_{epochs}.pth')
+        torch.save(model.state_dict(), f'20_aug_logged_{epochs}.pth')
 
         lr_scheduler.step()
         model.eval()
+        val_step_size = (global_steps - val_steps) // len(val_loader)
         with torch.no_grad():
             for steps, data in tqdm(enumerate(val_loader)):
+
                 seq = data['seq']
                 attn_mask = data['attn_mask']
                 pos_id = data['pos_id']
@@ -95,8 +92,8 @@ if __name__ == '__main__':
                              labels=seq)
 
 
-                writer.add_scalar('loss/val', loss[0].mean(), global_step=global_steps)
-
+                writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
+                val_steps += val_step_size
 
     writer.close()
 

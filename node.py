@@ -607,7 +607,7 @@ class STNode(object):
 
 
 class SplittingTree(object):
-    def __init__(self, idx_img, cmap, grad_from='wall'):
+    def __init__(self, idx_img, cmap, grad_from='wall', door_img=None):
         if not isinstance(idx_img, (np.ndarray,)):
             raise ValueError('The image must be an np.array object')
 
@@ -621,6 +621,7 @@ class SplittingTree(object):
                 raise e
 
         self.idx_img = idx_img
+        self.door_img = door_img
         self.walls = idx_img == 1
         self.cmap = cmap
         self.img_height = self.idx_img.shape[0]
@@ -688,7 +689,7 @@ class SplittingTree(object):
 
     def _is_hjoint_wall(self, box1: STNode, box2:STNode):
         if not box1.xmax == box2.xmin:
-            raise ValueError('The boxes are not joinable')
+            return False
 
         # slice original image
         wall_slice = self.idx_img[box1.ymin:box1.ymax, box1.xmax-1]
@@ -708,19 +709,9 @@ class SplittingTree(object):
         return False
 
 
-        #     raise ValueError('The slice is not wall')
-        #
-        # idx = int(idx)
-        # print(f'horiz no wall idx {idx}')
-        #
-        # if idx == 0:
-        #     return True
-        #
-        # return False
-
     def _is_vjoint_wall(self, box1, box2):
         if not box1.ymax == box2.ymin:
-            raise ValueError('The boxes are not joinable')
+            return False
 
         # slice original image
         wall_slice = self.idx_img[box1.ymax-1, box1.xmin:box1.xmax]
@@ -735,6 +726,54 @@ class SplittingTree(object):
 
         if 1 in idx_right:
             if len(idx_right) == 1:
+                return True
+
+        return False
+
+    def _is_door_vert(self, box1, box2):
+        if not box1.ymax == box2.ymin:
+            return False
+
+        # slice original image
+        shared_xmin = max(box1.xmin, box2.xmin)
+        shared_xmax = min(box1.xmax, box2.xmax)
+        wall_slice = self.door_img[box1.ymax-1, shared_xmin:shared_xmax]
+        idx = np.unique(wall_slice)
+
+        wall_slice_right = self.door_img[box2.ymin, shared_xmin:shared_xmax]
+        idx_right = np.unique(wall_slice_right)
+
+        # print(wall_slice)
+
+        if 1 in idx:
+            if np.count_nonzero(wall_slice) > 1:
+                return True
+
+        if 1 in idx_right:
+            if np.count_nonzero(wall_slice_right) > 1:
+                return True
+
+        return False
+
+    def _is_door_horiz(self, box1: STNode, box2:STNode):
+        if not box1.xmax == box2.xmin:
+            return False
+
+        # slice original image
+        shared_ymin = max(box1.ymin, box2.ymin)
+        shared_ymax = min(box1.ymax, box2.ymax)
+        wall_slice = self.door_img[shared_ymin:shared_ymax, box1.xmax-1]
+        idx = np.unique(wall_slice)
+
+        wall_slice_right = self.door_img[shared_ymin:shared_ymax, box2.xmin]
+        idx_right = np.unique(wall_slice_right)
+
+        if 1 in idx:
+            if np.count_nonzero(wall_slice) > 1:
+                return True
+
+        if 1 in idx_right:
+            if np.count_nonzero(wall_slice_right) > 1:
                 return True
 
         return False
@@ -876,7 +915,7 @@ class SplittingTree(object):
 
     def find_horiz_adj(self):
         self.horiz_adj = nx.DiGraph()
-        self.horiz_adj.add_nodes_from([ii for ii in range(len(self.boxes))])
+        self.horiz_adj.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
 
 
         for source_idx, node in enumerate(self.boxes):
@@ -892,7 +931,7 @@ class SplittingTree(object):
 
     def find_vert_adj(self):
         self.vert_adj = nx.DiGraph()
-        self.vert_adj.add_nodes_from([ii for ii in range(len(self.boxes))])
+        self.vert_adj.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
 
         for source_idx, node in enumerate(self.boxes):
             for dest_idx, dnode in enumerate(self.boxes):
@@ -904,6 +943,35 @@ class SplittingTree(object):
 
 
         return self.vert_adj
+
+    def find_horiz_door(self):
+        self.horiz_door = nx.DiGraph()
+        self.horiz_door.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
+
+        for source_idx, node in enumerate(self.boxes):
+            for dest_idx, dnode in enumerate(self.boxes):
+                if source_idx == dest_idx:
+                    continue
+
+                if self._is_door_horiz(node, dnode):  # or dnode.is_vadj(node):
+                    self.horiz_door.add_edge(source_idx, dest_idx)
+
+        return self.horiz_door
+
+
+    def find_vert_door(self):
+        self.vert_door = nx.DiGraph()
+        self.vert_door.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
+
+        for source_idx, node in enumerate(self.boxes):
+            for dest_idx, dnode in enumerate(self.boxes):
+                if source_idx == dest_idx:
+                    continue
+
+                if self._is_door_vert(node, dnode):  # or dnode.is_vadj(node):
+                    self.vert_door.add_edge(source_idx, dest_idx)
+
+        return self.vert_door
 
 
     def show_graphs(self):
