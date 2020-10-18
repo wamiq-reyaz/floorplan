@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
-
+from datetime import datetime as dt
 from rplan import RrplanGraph, Flip, Rot90,RrplanDoors
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
@@ -19,7 +19,10 @@ from glob import glob
 import argparse
 from utils import on_local
 import json
+import wandb
+import uuid
 
+PROJECT = 'FloorPlan'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -112,13 +115,19 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=args.lr, eps=1e-6)
     lr_scheduler = StepLR(optimizer, step_size=args.step, gamma=args.gamma)
 
-    writer = SummaryWriter(comment='intial_door_model_5_tuple')
+    # writer = SummaryWriter(comment='intial_door_model_5_tuple')\
 
+
+    run_id = "GraphGPT-{}-bs{}-lr{}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'),
+                                                                      args.bs, args.lr, args.enc_layer, args.dec_layer,
+                                                                      args.dim, uuid.uuid4())
+    wandb.init(project=PROJECT, name=run_id, config=args, dir=".", save_code=True, notes=args.notes)
+    wandb.watch(model)
     global_steps = 1
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/doors/' + args.notes
+    SAVE_LOCATION = args.root_dir + f'models/doors/' + args.run_id
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
@@ -167,7 +176,8 @@ if __name__ == '__main__':
             optimizer.step()
 
             # if steps % 100 == 0:
-            writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
+            # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
+            wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
         torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_eps_m6_mlp_lr_m4_{epochs}.pth')
 
@@ -189,11 +199,13 @@ if __name__ == '__main__':
                               vert_attn_mask=vert_attn_mask)
 
 
-                writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
+                # writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
+                wandb.log({'loss/val': loss[0].mean()}, step=val_steps)
+
                 val_steps += val_step_size
 
 
-    writer.close()
+    # writer.close()
 
 
 
