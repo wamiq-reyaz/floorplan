@@ -118,7 +118,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/doors/'
+    SAVE_LOCATION = args.root_dir + f'models/doors/' + args.notes
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
