@@ -141,8 +141,8 @@ if __name__ == '__main__':
     # f, ax = st.show_horiz_graph()
     # f, ax = st.show_graphs()
 
-    aa = st.find_vert_door()
-    bb = st.find_horiz_door()
+    aa = st.find_vert_wall()
+    bb = st.find_horiz_wall()
 
     print(aa.edges())
     print(bb.edges())

@@ -11,10 +11,10 @@ def load_pickle(fname):
         return pickle.load(fd)
 
 if __name__ == '__main__':
-    ROOT_DIR = './samples/triples_0.8/'
+    ROOT_DIR = '/home/parawr/Projects/floorplan/samples/triples_0.8/'
     verts = glob(os.path.join(ROOT_DIR, '*.npz'))
 
-    curr_file = verts[3333]
+    curr_file = verts[0]
     base_name = os.path.basename(curr_file)
     root_name = os.path.splitext(base_name)[0]
 

@@ -9,31 +9,71 @@ import torch.functional as F
 from tqdm import tqdm
 import argparse
 
-from rplan import RrplanGraph, RrplanDoors, RrplanNPZTriples
+from rplan import RrplanNPZFivers
 from gpt2 import GraphGPTModel
 from utils import make_rgb_indices, rplan_map
 
 from transformers.configuration_gpt2 import GPT2Config
 from easydict import EasyDict as ED
-import argparse
-from utils import on_local
 import pickle
 from datetime import datetime
 
+
+
+def parse_edge_seq(seq):
+    curr_node = 0
+    edge_list = []
+
+    seq_biased = seq - 2
+    for elem in seq_biased:
+        if elem == -1:
+            curr_node += 1
+            continue
+        elif elem == -2:
+            break
+        else:
+            edge_list.append((curr_node, elem))
+
+    return edge_list
+
+def parse_vert_seq(seq):
+    if isinstance(seq, torch.Tensor):
+        try:
+            seq = seq.cpu().numpy()
+        except:
+            seq = seq.numpy()
+
+    # print(seq)
+    # first slice the head off
+    seq = seq[2:, :]
+
+    #find the max along any axis of id, x, y
+    stop_token_idx = np.argmax(seq[:, 0])
+
+
+    boxes = seq[:stop_token_idx, :] - 1
+
+    return boxes
+
+
+
 if __name__ == '__main__':
-    dset = RrplanNPZTriples(root_dir='/home/parawr/Projects/floorplan/samples/triples_0.8',
+    BATCH_SIZE = 30
+    dset = RrplanNPZFivers(root_dir='./samples/triples_0.8',
                  seq_len=120,
                  edg_len=100,
                  vocab_size=65)
 
-    dloader = DataLoader(dset, batch_size=1, num_workers=10)
+    dloader = DataLoader(dset, batch_size=BATCH_SIZE, num_workers=10)
 
+
+    # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
         vocab_size=65,
         n_positions=120,
         n_ctx=120,
-        n_embd=192,
-        n_layer=8,
+        n_embd=264,
+        n_layer=12,
         n_head=12,
         is_causal=False,
         is_encoder=True
@@ -41,10 +81,10 @@ if __name__ == '__main__':
 
     dec = GPT2Config(
         vocab_size=65,
-        n_positions=48,
-        n_ctx=48,
-        n_embd=192,
-        n_layer=14,
+        n_positions=100,
+        n_ctx=100,
+        n_embd=264,
+        n_layer=12,
         n_head=12,
         is_causal=True,
         is_encoder=False
@@ -54,11 +94,9 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('/mnt/ibex/Projects/floorplan/.models/doors/'
-                      'GraphGPT-18-Oct_21-47-bs144-lr0.00014269836502296852-'
-                      'enl8-decl14-dim_embed192-445e6f65-4652-'
-                      '497d-a781-182b214973b0model_doors'
-                      '_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+
+    # TODO: the model to load
+    ckpt = torch.load('./models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -72,34 +110,19 @@ if __name__ == '__main__':
     model.load_state_dict(model_dict, strict=True)
     model.eval()
 
-    dloader_iter = iter(dloader)
 
 
+    bs = BATCH_SIZE
 
+    for jj, data in tqdm(enumerate(dloader)):
 
-    stats = ED()
-    NUM_ROOM_TYPES = rplan_map.shape[0]
-
-    stats.n_rooms = []
-    stats.widths = [[] for _ in range(NUM_ROOM_TYPES)]
-    stats.heights = [[] for _ in range(NUM_ROOM_TYPES)]
-    stats.xlocs = [[] for _ in range(NUM_ROOM_TYPES)]
-    stats.ylocs = [[] for _ in range(NUM_ROOM_TYPES)]
-    stats.hadjs = [[] for _ in range(NUM_ROOM_TYPES)]
-    stats.vadjs = [[] for _ in range(NUM_ROOM_TYPES)]
-
-
-    bs = 4
-    data = next(dloader_iter)
-    # data = next(dloader_iter)
-    for jj in tqdm(range(1)):
-
-        vert_seq = data['vert_seq'].cuda().repeat(bs, 1, 1)
-        vert_attn_mask = data['vert_attn_mask'].cuda().repeat(bs, 1)
+        vert_seq = data['vert_seq'].cuda()
+        vert_attn_mask = data['vert_attn_mask'].cuda()
+        # print(data['file_name'])
 
 
         input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
-        for ii in range(48):
+        for ii in range(100):
             position_ids = torch.arange(ii+1, dtype=torch.long).cuda().unsqueeze(0).repeat(bs, 1)
             attn_mask = torch.ones(ii+1, dtype=torch.float).cuda().unsqueeze(0).repeat(bs, 1)
             loss = model(node=vert_seq,
@@ -116,16 +139,25 @@ if __name__ == '__main__':
 
 
 
-            # print(input_ids.shape, next_token.shape)
+
             input_ids = torch.cat([input_ids, next_token], dim=-1)
             # print(input_ids.shape)
             # print(input_ids)
 
 
-        input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] - 2 # drop 0 - 2
+        input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] # drop 0
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
-        print(samples)
+
+        for jj, ss in enumerate(samples):
+            full_name =  data['file_name'][jj]
+            base_name = os.path.basename(full_name)
+            root_name = os.path.splitext(base_name)[0]
+
+            # TODO: path to save
+            save_path = os.path.join('samples', 'triples_0.8', 'edges', 'h', root_name + '.pkl')
+            with open(save_path, 'wb') as fd:
+                pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 

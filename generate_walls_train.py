@@ -65,8 +65,8 @@ def main():
                 st.create_tree()
                 st._merge_small_boxes(cross_wall=False)
                 st._merge_vert_boxes(cross_wall=False)
-                horiz_door = st.find_horiz_door()
-                vert_door = st.find_vert_door()
+                horiz_door = st.find_horiz_wall()
+                vert_door = st.find_vert_wall()
 
                 # f, ax = st.show_boxes('merged')
                 # plt.savefig(f'{idx}_no_cross_wall.png', dpi=160)
@@ -79,9 +79,9 @@ def main():
                 # raise(e)
 
 
-            horiz_door_file = img_name + '_doorlist_h.pkl'
-            vert_door_file = img_name + '_doorlist_v.pkl'
-            all_door_file = img_name + '_doorlist_all.pkl'
+            horiz_door_file = img_name + 'walllist_h.pkl'
+            vert_door_file = img_name + 'walllist_v.pkl'
+            all_door_file = img_name + 'walllist_all.pkl'
 
             with open(horiz_door_file, 'wb') as fd:
                 pickle.dump(horiz_door.edges(), fd, protocol=pickle.HIGHEST_PROTOCOL)
@@ -101,7 +101,7 @@ def main():
     print(max_rooms)
     import json
 
-    with open('length.json', 'w') as fd:
+    with open('length_wall.json', 'w') as fd:
         json.dump({'hedges_max': max_horiz_edges,
                    'hdict_max': max_horiz_dict,
                    'vedges_max': max_vert_edges,

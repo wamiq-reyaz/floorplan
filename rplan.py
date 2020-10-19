@@ -246,6 +246,52 @@ class RrplanNPZTriples(Dataset):
     def __len__(self):
         return len(self.file_names)
 
+class RrplanNPZFivers(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 seq_len=200,
+                 vocab_size=65,
+                 edg_len=100,
+                 transforms=None):
+        super().__init__()
+        self.root_dir = root_dir
+        self.file_names = glob(os.path.join(self.root_dir, '*.npz'))
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.edg_len = edg_len
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = self.file_names[idx]
+
+        # create the vertex_data first
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens['arr_0'] + 1 # shift original by 1
+            tokens = self.transforms(tokens)
+            length = len(tokens)
+
+        vert_seq = np.ones((self.seq_len, 5), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0, 0, 0, 0, 0)
+        vert_seq[2:length+2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length+2] = 1
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'file_name': path,
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+    def __len__(self):
+        return len(self.file_names)
+
 
 
 class RrplanDoors(Dataset):
@@ -358,7 +404,115 @@ class RrplanDoors(Dataset):
     def __len__(self):
         return len(self.file_names)
 
+class RrplanWalls(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 seq_len=200,
+                 vocab_size=65,
+                 edg_len=100,
+                 transforms=None,
+                 dims=5,
+                 doors='all'):
+        # TODO: implement dims and doors strategy
+        super().__init__()
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
 
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.edg_len = edg_len
+        if dims not in [3, 5]:
+            raise ValueError('Dims can only be 3 or 5')
+        self.dims = dims
+        self.doors = doors
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+            print(path)
+
+        suffix = '_image_nodoor'
+        if self.doors == 'all':
+            suffix += '_walllist_all.pkl'
+
+        elif self.doors == 'vert':
+            suffix += '_walllist_v.pkl'
+
+        elif self.doors == 'horiz':
+            suffix += '_walllist_h.pkl'
+
+        else:
+            raise ValueError('The door type is invalid')
+
+        door_file = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            suffix)
+
+        if not os.path.exists(door_file):
+            door_file = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            suffix)
+            print(door_file)
+
+        # create the vertex_data first
+        with open(path, 'rb') as f:
+            tokens = np.load(path) + 1 # shift original by 1
+            tokens = tokens[:, :self.dims] # drop h and w
+            tokens = self.transforms(tokens)
+            length = len(tokens)
+
+        vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0,) * self.dims
+        vert_seq[2:length+2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length+2] = 1
+
+        # create the door data
+        flat_list = []
+        with open(door_file, 'rb') as f:
+            door_list = pickle.load(f)
+            # print(door_list)
+            for sublist in door_list:
+                flat_list += list(sublist)
+                flat_list += [-1]
+            flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
+            length = len(flat_list)
+
+        # print(flat_list)
+        edg_seq = np.ones(self.edg_len) * -2
+
+        # print(flat_list)
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+    def __len__(self):
+        return len(self.file_names)
 
 if __name__ == '__main__':
     # dset = Rplan(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
@@ -373,6 +527,16 @@ if __name__ == '__main__':
 
 
 
-    dset_graph = RrplanGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
-    aa = dset_graph[0]
-    print(aa)
+    # dset_graph = RrplanGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
+    # aa = dset_graph[0]
+    # print(aa)
+    from tqdm import tqdm
+    dset_doors_v = RrplanDoors(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='vert')
+
+    # for ii in tqdm(range(len(dset_doors_v))):
+    #     try:
+    #         _ = dset_doors_v[ii]
+    #     except:
+    #         print(ii)
+
+    print(dset_doors_v.file_names[46545])

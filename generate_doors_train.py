@@ -102,7 +102,7 @@ def main():
                 all_edges = list(horiz_door.edges()) + list(vert_door.edges())
                 pickle.dump(all_edges, fd, protocol=pickle.HIGHEST_PROTOCOL)
                 max_vert_edges = max(max_vert_edges, len(all_edges))
-
+                sys.exit()
 
     print(max_rooms)
     import json
