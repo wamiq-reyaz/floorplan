@@ -57,11 +57,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if on_local():
-        args.root = './'
+        args.root_dir = './'
         args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
 
     else: # assume IBEX
-        args.root = '/ibex/scratch/parawr/floorplan/'
+        args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
     dset = RrplanDoors(root_dir=args.datapath,
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/doors/' + args.run_id
+    SAVE_LOCATION = args.root_dir + f'models/doors/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
@@ -184,6 +184,7 @@ if __name__ == '__main__':
         lr_scheduler.step()
         model.eval()
         val_step_size = (global_steps - val_steps) // len(val_loader)
+        all_val_stats = []
         with torch.no_grad():
             for steps, data in tqdm(enumerate(val_loader)):
                 vert_seq = data['vert_seq'].cuda()
@@ -198,11 +199,16 @@ if __name__ == '__main__':
                           labels=edg_seq,
                               vert_attn_mask=vert_attn_mask)
 
+                all_val_stats.append(loss[0].mean().item())
+
 
                 # writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
-                wandb.log({'loss/val': loss[0].mean()}, step=val_steps)
 
-                val_steps += val_step_size
+                # global_steps += 1
+                # val_steps += val_step_size
+            total_nll = np.mean(np.asarray(all_val_stats))
+            wandb.log({'loss/val': total_nll}, step=global_steps)
+            global_steps += 1
 
 
     # writer.close()
