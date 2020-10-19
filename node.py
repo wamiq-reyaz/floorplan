@@ -692,10 +692,12 @@ class SplittingTree(object):
             return False
 
         # slice original image
-        wall_slice = self.idx_img[box1.ymin:box1.ymax, box1.xmax-1]
+        shared_ymin = max(box1.ymin, box2.ymin)
+        shared_ymax = min(box1.ymax, box2.ymax)
+        wall_slice = self.idx_img[shared_ymin:shared_ymax,, box1.xmax-1]
         idx = np.unique(wall_slice)
 
-        wall_slice_right = self.idx_img[box1.ymin:box1.ymax, box2.xmin]
+        wall_slice_right = self.idx_img[shared_ymin:shared_ymax,, box2.xmin]
         idx_right = np.unique(wall_slice_right)
 
         if 1 in idx:
@@ -714,10 +716,12 @@ class SplittingTree(object):
             return False
 
         # slice original image
-        wall_slice = self.idx_img[box1.ymax-1, box1.xmin:box1.xmax]
+        shared_xmin = max(box1.xmin, box2.xmin)
+        shared_xmax = min(box1.xmax, box2.xmax)
+        wall_slice = self.idx_img[box1.ymax-1, shared_xmin:shared_xmax]
         idx = np.unique(wall_slice)
 
-        wall_slice_right = self.idx_img[box2.ymin, box1.xmin:box1.xmax]
+        wall_slice_right = self.idx_img[box2.ymin, shared_xmin:shared_xmax]
         idx_right = np.unique(wall_slice_right)
 
         if 1 in idx:
@@ -972,6 +976,35 @@ class SplittingTree(object):
                     self.vert_door.add_edge(source_idx, dest_idx)
 
         return self.vert_door
+
+    def find_horiz_wall(self):
+        self.horiz_wall = nx.DiGraph()
+        self.horiz_wall.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
+
+        for source_idx, node in enumerate(self.boxes):
+            for dest_idx, dnode in enumerate(self.boxes):
+                if source_idx == dest_idx:
+                    continue
+
+                if self._is_hjoint_wall(node, dnode):  # or dnode.is_vadj(node):
+                    self.horiz_wall.add_edge(source_idx, dest_idx)
+
+        return self.horiz_wall
+
+
+    def find_vert_wall(self):
+        self.vert_wall = nx.DiGraph()
+        self.vert_wall.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
+
+        for source_idx, node in enumerate(self.boxes):
+            for dest_idx, dnode in enumerate(self.boxes):
+                if source_idx == dest_idx:
+                    continue
+
+                if self._is_vjoint_wall(node, dnode):  # or dnode.is_vadj(node):
+                    self.vert_wall.add_edge(source_idx, dest_idx)
+
+        return self.vert_wall
 
 
     def show_graphs(self):
