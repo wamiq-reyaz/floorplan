@@ -694,10 +694,10 @@ class SplittingTree(object):
         # slice original image
         shared_ymin = max(box1.ymin, box2.ymin)
         shared_ymax = min(box1.ymax, box2.ymax)
-        wall_slice = self.idx_img[shared_ymin:shared_ymax,, box1.xmax-1]
+        wall_slice = self.idx_img[shared_ymin:shared_ymax, box1.xmax-1]
         idx = np.unique(wall_slice)
 
-        wall_slice_right = self.idx_img[shared_ymin:shared_ymax,, box2.xmin]
+        wall_slice_right = self.idx_img[shared_ymin:shared_ymax, box2.xmin]
         idx_right = np.unique(wall_slice_right)
 
         if 1 in idx:
