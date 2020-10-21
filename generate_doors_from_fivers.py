@@ -96,7 +96,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    BATCH_SIZE = args.bs
+    # BATCH_SIZE = args.bs
+    BATCH_SIZE = 64
     dset = RrplanNPZFivers(
         root_dir=args.input_dir,
         seq_len=args.seq_len,
@@ -152,17 +153,14 @@ if __name__ == '__main__':
     model.eval()
 
 
-
-    bs = BATCH_SIZE
-
     for jj, data in tqdm(enumerate(dloader)):
 
         vert_seq = data['vert_seq'].to(device=device)
         vert_attn_mask = data['vert_attn_mask'].to(device=device)
         # print(data['file_name'])
 
-
-        input_ids = torch.zeros(bs, dtype=torch.long).to(device=device).reshape(bs, 1)
+        bs = vert_seq.shape[0]
+        input_ids = torch.zeros(bs, dtype=torch.long).to(device=device).reshape(vert_seq.shape[0], 1)
         for ii in range(48):
             position_ids = torch.arange(ii+1, dtype=torch.long, device=device).unsqueeze(0).repeat(bs, 1)
             attn_mask = torch.ones(ii+1, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
