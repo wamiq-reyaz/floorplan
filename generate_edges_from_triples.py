@@ -59,7 +59,7 @@ def parse_vert_seq(seq):
 
 if __name__ == '__main__':
     BATCH_SIZE = 30
-    dset = RrplanNPZTriples(root_dir='./samples/triples_0.8',
+    dset = RrplanNPZTriples(root_dir='/home/parawr/Projects/floorplan/samples/triples_0.5',
                  seq_len=120,
                  edg_len=100,
                  vocab_size=65)
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('./models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    ckpt = torch.load('/home/parawr/Projects/floorplan/models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -145,12 +145,15 @@ if __name__ == '__main__':
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
 
+        SAVE_DIR = os.path.join('samples', 'triples_0.5', 'edges', 'h')
+        if not os.path.exists(SAVE_DIR):
+            os.makedirs(SAVE_DIR, exist_ok=True)
         for jj, ss in enumerate(samples):
-            full_name =  data['file_name'][jj]
+            full_name = data['file_name'][jj]
             base_name = os.path.basename(full_name)
             root_name = os.path.splitext(base_name)[0]
 
-            save_path = os.path.join('samples', 'triples_0.8', 'edges', 'h', root_name + '.pkl')
+            save_path = os.path.join( SAVE_DIR, root_name + '.pkl')
             with open(save_path, 'wb') as fd:
                 pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
 

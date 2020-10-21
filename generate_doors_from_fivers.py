@@ -58,33 +58,56 @@ def parse_vert_seq(seq):
 
 
 if __name__ == '__main__':
-    BATCH_SIZE = 30
-    dset = RrplanNPZFivers(root_dir='./samples/triples_0.8',
-                 seq_len=120,
-                 edg_len=100,
-                 vocab_size=65)
+    parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
+    # Model
+    parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
+    parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
+    parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
+    parser.add_argument('--edg_len', default=48, type=int, help='how long is the edge length or door length')
+    parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
+    parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
+    parser.add_argument('--doors', default='all', type=str, help='h/v/all doors')
+    parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
+    parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
+    parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
+
+    # optimizer
+args.vocab    parser.add_argument('--bs', default=64, type=int, help='batch size')
+
+    # Data
+    parser.add_argument("--datapath", default='/home/parawr/Projects/floorplan/samples/logged_0.8',
+                        type=str, help="Root folder to save data in")
+
+    args = parser.parse_args()
+
+    BATCH_SIZE = args.bs
+    dset = RrplanNPZFivers(root_dir=args.datapath,
+                 seq_len=args.seq_len,
+                 edg_len=args.edg_len,
+                 vocab_size=args.vocab)
 
     dloader = DataLoader(dset, batch_size=BATCH_SIZE, num_workers=10)
 
 
     # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
-        vocab_size=65,
-        n_positions=120,
-        n_ctx=120,
-        n_embd=264,
-        n_layer=12,
+        vocab_size=args.vocab,
+        n_positions=args.enc_n,
+        n_ctx=args.enc_n,
+        n_embd=args.dim,
+        n_layer=args.enc_layer,
         n_head=12,
         is_causal=False,
         is_encoder=True
     )
 
     dec = GPT2Config(
-        vocab_size=65,
-        n_positions=100,
-        n_ctx=100,
-        n_embd=264,
-        n_layer=12,
+        vocab_size=args.vocab,
+        n_positions=args.dec_n,
+        n_ctx=args.dec_n,
+        n_embd=args.dim,
+        n_layer=args.dec_layer,
         n_head=12,
         is_causal=True,
         is_encoder=False
@@ -96,7 +119,10 @@ if __name__ == '__main__':
     model_dict = {}
 
     # TODO: the model to load
-    ckpt = torch.load('./models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    ckpt = torch.load('/mnt/iscratch/floorplan/models/walls/'
+                      'GraphGPT-19-Oct_17-36----tuples5-bs144-'
+                      'lr0.00015-enl16-decl6-dim_embed192-d4977095'
+                      '-7fed-4e1f-9d3e-44cbb5cf9d63/model_doors_eps_m6_mlp_lr_m4_039.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -122,7 +148,7 @@ if __name__ == '__main__':
 
 
         input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
-        for ii in range(100):
+        for ii in range(48):
             position_ids = torch.arange(ii+1, dtype=torch.long).cuda().unsqueeze(0).repeat(bs, 1)
             attn_mask = torch.ones(ii+1, dtype=torch.float).cuda().unsqueeze(0).repeat(bs, 1)
             loss = model(node=vert_seq,
@@ -148,6 +174,7 @@ if __name__ == '__main__':
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] # drop 0
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
+        print(samples)
 
         for jj, ss in enumerate(samples):
             full_name =  data['file_name'][jj]

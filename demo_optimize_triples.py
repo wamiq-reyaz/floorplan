@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 from glob import glob
 import pickle
+from natsort import natsorted
 
 
 
@@ -11,15 +12,16 @@ def load_pickle(fname):
         return pickle.load(fd)
 
 if __name__ == '__main__':
-    ROOT_DIR = '/home/parawr/Projects/floorplan/samples/triples_0.8/'
-    verts = glob(os.path.join(ROOT_DIR, '*.npz'))
+    ROOT_DIR = '/home/parawr/Projects/floorplan/samples/triples_0.5/'
+    verts = natsorted(glob(os.path.join(ROOT_DIR, '*.npz')))
+    print(len(verts))
 
-    curr_file = verts[0]
+    curr_file = verts[4791] #.replace('temp_0.5', 'temp_1.0')
     base_name = os.path.basename(curr_file)
     root_name = os.path.splitext(base_name)[0]
 
-    horiz_file = os.path.join(ROOT_DIR, 'edges', 'h', root_name + '.pkl')
-    vert_file = os.path.join(ROOT_DIR, 'edges', 'v', root_name + '.pkl')
+    horiz_file = os.path.join('./samples/triples_0.5', 'edges', 'h', root_name + '.pkl')
+    vert_file = os.path.join('./samples/triples_0.5', 'edges', 'v', root_name + '.pkl')
 
 
     horiz_edges = load_pickle(horiz_file)

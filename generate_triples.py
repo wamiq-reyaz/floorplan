@@ -42,7 +42,7 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('./models/triples/triples_39.pth', map_location='cpu')
+    ckpt = torch.load('/home/parawr/Projects/floorplan/models/triples/triples_39.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     bs = 20
     sample_idx = 1
-    temperature = 0.8
+    temperature = 0.5
     for jj in tqdm(range(500)):
         input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
         for ii in range(120):
@@ -106,7 +106,7 @@ if __name__ == '__main__':
                 boxes = curr_sample[:stop_token_idx].reshape((-1, 3)) - 1
 
             curr_time = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-            file_name = './samples/triples_0.8/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
+            file_name = '/home/parawr/Projects/floorplan/samples/triples_0.5/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
             np.savez(file_name, boxes)
 
 
