@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
 
     # optimizer
-args.vocab    parser.add_argument('--bs', default=64, type=int, help='batch size')
+    parser.add_argument('--bs', default=64, type=int, help='batch size')
 
     # Data
     parser.add_argument("--datapath", default='/home/parawr/Projects/floorplan/samples/logged_0.8',
