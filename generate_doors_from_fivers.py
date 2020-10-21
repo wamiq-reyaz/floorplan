@@ -1,11 +1,8 @@
 import os, sys
+import json
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.nn import DataParallel
-from torch.optim import Adam
-import torch.functional as F
 from tqdm import tqdm
 import argparse
 
@@ -58,14 +55,9 @@ def parse_vert_seq(seq):
 
 
 if __name__ == '__main__':
-    input_dir = '../data/results/5_tuples_t_0.8/boxes'
-    output_dir = '../data/results/5_tuples_t_0.8/door_edges'
-    model_path = '../data/models/doors/GraphGPT-18-Oct_23-02-bs32-lr0.00013660761120233735-enl14-decl8-dim_embed144-9c895fce-584b-424e-96f6-3ea3c634bc39model_doors_eps_m6_mlp_lr_m4_34.pth'
-    # output_dir = '../data/results/5_tuples_t_0.8/wall_edges'
-	
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
+    
     # Model
-    parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
     parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
     parser.add_argument('--edg_len', default=48, type=int, help='how long is the edge length or door length')
@@ -79,18 +71,37 @@ if __name__ == '__main__':
 
     # optimizer
     parser.add_argument('--bs', default=64, type=int, help='batch size')
+    parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
+    parser.add_argument('--device', default='cuda:0', type=str, help='device to use')
 
     # Data
-    parser.add_argument("--datapath", default='/home/parawr/Projects/floorplan/samples/logged_0.8',
-                        type=str, help="Root folder to save data in")
+    # parser.add_argument('--input_dir', default='/home/parawr/Projects/floorplan/samples/logged_0.8', type=str, help='input directory (containing samples)')
+    
+    # parser.add_argument('--input_dir', default='../data/results/5_tuples_t_0.8/boxes', type=str, help='input directory (containing samples)')
+    # parser.add_argument('--output_dir', default='../data/results/5_tuples_t_0.8/door_edges', type=str, help='output directory (will contain samples with added edges)')
+    # parser.add_argument('--model_path', default='../data/models/doors/GraphGPT-18-Oct_23-02-bs32-lr0.00013660761120233735-enl14-decl8-dim_embed144-9c895fce-584b-424e-96f6-3ea3c634bc39model_doors_eps_m6_mlp_lr_m4_34.pth', type=str, help='location of the model weights file')
+    # parser.add_argument('--model_args_path', default='../data/models/doors/GraphGPT-18-Oct_23-02-bs32-lr0.00013660761120233735-enl14-decl8-dim_embed144-9c895fce-584b-424e-96f6-3ea3c634bc39args.json', type=str, help='location of the arguments the model was trained with (needed to reconstruct the model)')
+
+    parser.add_argument('--input_dir', default='../data/results/5_tuples_t_0.8/boxes', type=str, help='input directory (containing samples)')
+    parser.add_argument('--output_dir', default='../data/results/5_tuples_t_0.8/wall_edges', type=str, help='output directory (will contain samples with added edges)')
+    parser.add_argument('--model_path', default='../data/models/walls/model_doors_eps_m6_mlp_lr_m4_039.pth', type=str, help='location of the model weights file')
+    parser.add_argument('--model_args_path', default='../data/models/walls/args.json', type=str, help='location of the arguments the model was trained with (needed to reconstruct the model)')
+    args = parser.parse_args()
+
+    # load training arguments (these overwrite the defaults, but are overwritten by any parameter set in the command line)
+    with open(args.model_args_path, 'r') as f:
+        model_args = json.load(f)
+    parser.set_defaults(
+        **{arg_name: arg_val for arg_name, arg_val in model_args.items() if arg_name in vars(args).keys()})
 
     args = parser.parse_args()
 
     BATCH_SIZE = args.bs
-    dset = RrplanNPZFivers(root_dir=args.datapath,
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab)
+    dset = RrplanNPZFivers(
+        root_dir=args.input_dir,
+        seq_len=args.seq_len,
+        edg_len=args.edg_len,
+        vocab_size=args.vocab)
 
     dloader = DataLoader(dset, batch_size=BATCH_SIZE, num_workers=10)
 
@@ -119,12 +130,14 @@ if __name__ == '__main__':
     )
     model = GraphGPTModel(enc, dec)
 
-    model = model.cuda()
+    device = torch.device(args.device)
+
+    model = model.to(device=device)
 
     model_dict = {}
 
     # TODO: the model to load
-    ckpt = torch.load(model_path, map_location='cpu')
+    ckpt = torch.load(args.model_path, map_location=device)
 
     try:
         weights = ckpt.state_dict()
@@ -144,15 +157,15 @@ if __name__ == '__main__':
 
     for jj, data in tqdm(enumerate(dloader)):
 
-        vert_seq = data['vert_seq'].cuda()
-        vert_attn_mask = data['vert_attn_mask'].cuda()
+        vert_seq = data['vert_seq'].to(device=device)
+        vert_attn_mask = data['vert_attn_mask'].to(device=device)
         # print(data['file_name'])
 
 
-        input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
+        input_ids = torch.zeros(bs, dtype=torch.long).to(device=device).reshape(bs, 1)
         for ii in range(48):
-            position_ids = torch.arange(ii+1, dtype=torch.long).cuda().unsqueeze(0).repeat(bs, 1)
-            attn_mask = torch.ones(ii+1, dtype=torch.float).cuda().unsqueeze(0).repeat(bs, 1)
+            position_ids = torch.arange(ii+1, dtype=torch.long, device=device).unsqueeze(0).repeat(bs, 1)
+            attn_mask = torch.ones(ii+1, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
             loss = model(node=vert_seq,
                          edg=input_ids,
                          attention_mask=attn_mask,
@@ -184,6 +197,6 @@ if __name__ == '__main__':
             root_name = os.path.splitext(base_name)[0]
 
             # TODO: path to save
-            save_path = os.path.join(output_dir, root_name + '.pkl')
+            save_path = os.path.join(args.output_dir, root_name + '.pkl')
             with open(save_path, 'wb') as fd:
                 pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
