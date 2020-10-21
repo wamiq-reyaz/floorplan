@@ -58,10 +58,15 @@ def parse_vert_seq(seq):
 
 
 if __name__ == '__main__':
+    input_dir = '../data/results/5_tuples_t_0.8/boxes'
+    output_dir = '../data/results/5_tuples_t_0.8/door_edges'
+    model_path = '../data/models/doors/GraphGPT-18-Oct_23-02-bs32-lr0.00013660761120233735-enl14-decl8-dim_embed144-9c895fce-584b-424e-96f6-3ea3c634bc39model_doors_eps_m6_mlp_lr_m4_34.pth'
+    # output_dir = '../data/results/5_tuples_t_0.8/wall_edges'
+
     BATCH_SIZE = 30
-    dset = RrplanNPZFivers(root_dir='./samples/triples_0.8',
+    dset = RrplanNPZFivers(root_dir=input_dir,
                  seq_len=120,
-                 edg_len=100,
+                 edg_len=48,
                  vocab_size=65)
 
     dloader = DataLoader(dset, batch_size=BATCH_SIZE, num_workers=10)
@@ -72,8 +77,8 @@ if __name__ == '__main__':
         vocab_size=65,
         n_positions=120,
         n_ctx=120,
-        n_embd=264,
-        n_layer=12,
+        n_embd=144,
+        n_layer=14,
         n_head=12,
         is_causal=False,
         is_encoder=True
@@ -81,10 +86,10 @@ if __name__ == '__main__':
 
     dec = GPT2Config(
         vocab_size=65,
-        n_positions=100,
-        n_ctx=100,
-        n_embd=264,
-        n_layer=12,
+        n_positions=48,
+        n_ctx=48,
+        n_embd=144,
+        n_layer=8,
         n_head=12,
         is_causal=True,
         is_encoder=False
@@ -96,7 +101,7 @@ if __name__ == '__main__':
     model_dict = {}
 
     # TODO: the model to load
-    ckpt = torch.load('./models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    ckpt = torch.load(model_path, map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -155,11 +160,6 @@ if __name__ == '__main__':
             root_name = os.path.splitext(base_name)[0]
 
             # TODO: path to save
-            save_path = os.path.join('samples', 'triples_0.8', 'edges', 'h', root_name + '.pkl')
+            save_path = os.path.join(output_dir, root_name + '.pkl')
             with open(save_path, 'wb') as fd:
                 pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-
-
-
