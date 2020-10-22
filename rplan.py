@@ -94,7 +94,7 @@ class Rplan(Dataset):
         with open(path, 'rb') as f:
             tokens = np.load(path)
             if self.drop_dim:
-                tokens = tokens[:, [0, 3,4]]
+                tokens = tokens[:, :3]
             tokens = tokens.ravel() + 1 # shift original by 1
             tokens = self.transforms(tokens)
             tokens = np.hstack((zero_token, tokens, stop_token))
