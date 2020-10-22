@@ -22,14 +22,33 @@ def parse_edge_seq(seq):
     edge_list = []
 
     seq_biased = seq - 2
-    for elem in seq_biased:
-        if elem == -1:
-            curr_node += 1
-            continue
-        elif elem == -2:
-            break
-        else:
-            edge_list.append((curr_node, elem))
+
+    # drop all -1
+    seq_as_list = list(seq_biased.ravel())
+    seq_dropped = [s for s in seq_as_list if s != -1]
+    # print(seq_dropped)
+
+    seq_dropped_np = np.array(seq_dropped, dtype=np.int)
+    stop_idx = np.argmin(seq_dropped_np)
+    # print(stop_idx)
+    seq_dropped_np = seq_dropped_np[:stop_idx]
+
+    seq_final = list(seq_dropped_np.ravel())
+    len_seq = len(seq_dropped_np)
+
+    if len_seq % 2 != 0:
+        print('yikes! this sample is bad')
+        return 0
+
+    # print(seq_dropped_np)
+    seq_dropped_np = seq_dropped_np.reshape((-1, 2))
+
+    num_edges = seq_dropped_np.shape[0]
+    # print(num_edges)
+
+    for ii in range(num_edges):
+        curr_edg = tuple(list(seq_dropped_np[ii, :].ravel()))
+        edge_list.append(curr_edg)
 
     return edge_list
 
@@ -196,5 +215,6 @@ if __name__ == '__main__':
 
             # TODO: path to save
             save_path = os.path.join(args.output_dir, root_name + '.pkl')
+
             with open(save_path, 'wb') as fd:
                 pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)

@@ -22,7 +22,7 @@ import uuid, shutil
 from glob import glob
 from datetime import datetime as dt
 
-PROJECT = 'Triples'
+PROJECT = 'Triplesxy'
 
 
 if __name__ == '__main__':
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=args.lr)
     lr_scheduler = StepLR(optimizer, step_size=args.step, gamma=args.gamma)
 
-    run_id = "GraphGPT-{}-bs{}-lr{}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'),
+    run_id = "GraphGPTxy-{}-bs{}-lr{}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'),
                                                                         args.bs, args.lr, args.enc_layer,
                                                                         args.dec_layer,
                                                                         args.dim, uuid.uuid4())
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     global_steps = 1
     val_steps = 1
 
-    SAVE_LOCATION = args.root_dir + f'models/triples/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/triples_xy/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):

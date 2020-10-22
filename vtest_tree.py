@@ -139,10 +139,13 @@ if __name__ == '__main__':
     vert_adj = st.find_vert_adj()
     # print(horiz_adj.nodes)
     # f, ax = st.show_horiz_graph()
-    # f, ax = st.show_graphs()
+    f, ax = st.show_graphs()
+    plt.show()
+
 
     aa = st.find_vert_wall()
     bb = st.find_horiz_wall()
+
 
     print(aa.edges())
     print(bb.edges())
@@ -155,8 +158,8 @@ if __name__ == '__main__':
     areas = []
     for rr in st.boxes:
         # print(rr.idx)
-        # areas.append(rr.get_area() / (64.0*64))
-        areas.append(64 / (64.0*64))
+        areas.append(rr.get_area() / (64.0*64))
+        # areas.append(64 / (64.0*64))
         floor.add_room(Node.from_data(rr.idx, rand(), rand(), rand(), rand()))
 
     floor.add_horiz_constraints(horiz_adj.edges())
