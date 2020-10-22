@@ -122,10 +122,15 @@ if __name__ == '__main__':
             # print(input_ids)
 
 
-        input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] - 2 # drop 0 - 2
+        input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] #- 2 # drop 0 - 2
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
         print(samples)
+
+        from generate_doors_from_fivers import parse_edge_seq
+
+        for ss in samples:
+            print(parse_edge_seq(ss))
 
 
 
