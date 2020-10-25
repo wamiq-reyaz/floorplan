@@ -77,7 +77,7 @@ class Node(object):
         self._class = class_id
 
     def get_class(self) -> int:
-        return self._class
+        return int(self._class)
 
     def getx(self) -> float:
         return self._aabb.getx()
@@ -131,6 +131,28 @@ class Floor(object):
 
         return out
 
+    def from_array(self, arr):
+        n_rooms = arr.shape[0]
+
+        for ii in range(n_rooms):
+            curr_room = arr[ii, :]
+            self.add_room(Node.from_data(
+                curr_room[0],
+                curr_room[1],
+                curr_room[2],
+                curr_room[4],
+                curr_room[3] # bloody xyhw instead of xywh
+
+            ))
+
+    def load_optimized_tuple(self, fname):
+         with open(fname, 'rb') as fd:
+             floor = np.load(fname)
+             # floor[:, 1:] = floor[:, 1:]*64
+             # floor = floor.astype(np.uint8)
+         return floor
+
+
     def get_nrooms(self) -> int:
         return len(self._rooms)
 
@@ -139,6 +161,10 @@ class Floor(object):
 
     def add_vert_constraints(self, edges) -> None:
         self.vert_constraints.add_edges_from(edges)
+
+    def clear_self_loops(self):
+        self.horiz_constraints.remove_edges_from(nx.selfloop_edges(self.horiz_constraints))
+        self.vert_constraints.remove_edges_from(nx.selfloop_edges(self.vert_constraints))
 
     def add_room(self, room) -> None:
         self._add_node_to_graph()
@@ -236,6 +262,20 @@ class Floor(object):
     def _get_color(self, idx:int, alpha=1.0):
         return [*(self._colormap[idx].ravel()), alpha]
 
+    def get_room_array(self):
+        room_array = np.zeros((self.get_nrooms(), 5), dtype=np.float32)
+        for ii, rr in enumerate(self._rooms):
+            room_array[ii, :] = (
+                                rr.get_class(),
+                                rr.getx(),
+                                rr.gety(),
+                                rr.get_width(),
+                                rr.get_height()
+                                )
+
+        return room_array
+
+
 
 
 
@@ -257,6 +297,7 @@ class LPSolver(object):
         self.summer = np.ones((self._n_vars))
         self._min_sep = 0
         self.lines_align = False
+        self.boxes_are_maximal = True
 
     def __repr__(self):
         pass
@@ -264,8 +305,11 @@ class LPSolver(object):
     def same_line_constraints(self):
         self.lines_align = True
 
+    def maximal_boxes_constraint(self, val):
+        self.boxes_are_maximal = val
+
     def get_floor(self):
-        return floor
+        return self._floor
 
     def solve(self, mode, iter=None):
         # self._model.setObjective(self.summer.T @ self.widths + self.summer.T @ self.heights, GRB.MINIMIZE)
@@ -323,13 +367,21 @@ class LPSolver(object):
             # print(self.xlocs[node])
             # print(self.bbox_width)
             if self.lines_align:
-                self._model.addConstr(self.xlocs[node] + self.widths[node] == self.bbox_width[0] , name=f'h_maximal_{node}')
+                if self.boxes_are_maximal:
+                    self._model.addConstr(self.xlocs[node] + self.widths[node] == self.bbox_width[0],
+                                          name=f'h_maximal_{node}')
+                else:
+                    self._model.addConstr(self.xlocs[node] + self.widths[node] == 1 , name=f'h_maximal_{node}')
             else:
                 self._model.addConstr(self.xlocs[node] + self.widths[node] - self.bbox_width[0] + self._min_sep <= 0.0, name=f'h_maximal_{node}')
 
         for node in self._get_all_maximal(self._floor.vert_constraints):
             if self.lines_align:
-                self._model.addConstr(self.ylocs[node] + self.heights[node] == self.bbox_height[0] , name=f'v_maximal_{node}')
+                if self.boxes_are_maximal:
+                    self._model.addConstr(self.ylocs[node] + self.heights[node] == 1 , name=f'v_maximal_{node}')
+                else:
+                    self._model.addConstr(self.ylocs[node] + self.heights[node] == self.bbox_height[0],
+                                          name=f'v_maximal_{node}')
             else:
                 self._model.addConstr(self.ylocs[node] + self.heights[node] - self.bbox_height[0] + self._min_sep <= 0.0, name=f'v_maximal_{node}')
 

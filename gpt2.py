@@ -393,6 +393,14 @@ class GPT2Encoder(nn.Module):
         self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
         self.lm_head = nn.Linear(config.n_embd, config.n_embd)
 
+        try:
+            self.id_embed = self.config.id_embed
+        except:
+            self.id_embed = False
+
+        if self.id_embed:
+            self.ide = nn.Embedding(10, config.n_embd)
+
         self.init_weights()
 
     def init_weights(self):
@@ -518,10 +526,15 @@ class GPT2Encoder(nn.Module):
 
         # print('Before embeddings')
         if inputs_embeds is None:
-            inputs_embeds = self.wte(input_ids)
+            if self.id_embed:
+                id_embeds = self.ide(input_ids[:, 1])
+                other_embeds = self.wte(input_ids[:, 1:])
+            else:
+                id_embeds = 0
+                inputs_embeds = self.wte(input_ids)
             # print(input_ids.shape)
             # print(inputs_embeds.shape)
-            inputs_embeds = torch.sum(inputs_embeds, dim=-2)
+            inputs_embeds = torch.sum(inputs_embeds, dim=-2) + id_embeds
             # print(inputs_embeds.shape)
 
         if token_type_ids is not None:
