@@ -41,7 +41,8 @@ if __name__ == '__main__':
         n_layer=12,
         n_head=12,
         is_causal=False,
-        is_encoder=True
+        is_encoder=True,
+        id_embed=True
     )
 
     dec = GPT2Config(
@@ -49,7 +50,7 @@ if __name__ == '__main__':
         n_positions=100,
         n_ctx=100,
         n_embd=264,
-        n_layer=20,
+        n_layer=12,
         n_head=12,
         is_causal=True,
         is_encoder=False
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=1e-4, eps=1e-6)
     lr_scheduler = StepLR(optimizer, step_size=15, gamma=0.1)
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(comment='id_but_otherwise_same_as_12_model')
 
     global_steps = 1
     val_steps = 1
@@ -98,7 +99,7 @@ if __name__ == '__main__':
             # if steps % 100 == 0:
             writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
 
-        torch.save(model.state_dict(), f'f_20_modelv_eps_m6_mlp_lr_m4_{epochs}.pth')
+        torch.save(model.state_dict(), f'id_embed_12_modelv_eps_m6_mlp_lr_m4_{epochs}.pth')
 
 
         # torch.save(model.state_dict(), f'face_modelv_eps_m6_mlp_lr_m4_{epochs}.pth')
