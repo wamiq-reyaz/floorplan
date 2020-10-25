@@ -179,7 +179,7 @@ if __name__ == '__main__':
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_eps_m6_mlp_lr_m4_{epochs:0.3d}.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_{epochs:0.3d}.pth')
 
         lr_scheduler.step()
         model.eval()

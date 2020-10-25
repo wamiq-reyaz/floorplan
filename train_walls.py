@@ -22,7 +22,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'Walls'
+PROJECT = 'Walls_3'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_eps_m6_mlp_lr_m4_{epochs:03d}.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls_{epochs:03d}.pth')
 
         lr_scheduler.step()
         model.eval()

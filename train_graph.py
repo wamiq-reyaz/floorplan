@@ -127,5 +127,5 @@ if __name__ == '__main__':
 
     writer.close()
 
-
+'triples_hw3_best.pth'
 
