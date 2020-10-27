@@ -1,9 +1,9 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --array=0-40
+#SBATCH --array=0-7
 #SBATCH --export=ALL,NCCL_SOCKET_IFNAME=eth0
 #SBATCH --partition=batch
-#SBATCH -J lif5walls
+#SBATCH -J lif3walls
 #SBATCH --cores-per-socket=5
 #SBATCH -o slurm/%A_%a.out
 #SBATCH -e slurm/%A_%a.err
@@ -16,4 +16,4 @@
 
 conda activate faclab
 
-wandb agent wamreyaz/FixedWalls/oljxamdx
+wandb agent wamreyaz/FixedWalls/w42qsoy0
