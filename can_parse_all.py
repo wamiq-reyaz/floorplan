@@ -49,49 +49,50 @@ if __name__ == '__main__':
                 st._merge_vert_boxes(cross_wall=False)
 
             except Exception as e:
-                raise(e)
-                sys.exit()
+                # raise(e)
+                # sys.exit()
                 bads.append(IMAGES[idx])
+                continue
 
             horiz_adj = st.find_horiz_adj()
             vert_adj = st.find_vert_adj()
 
 
-            n_nodes = len(st.boxes)
-            print('number of nodes,', n_nodes)
-            print(f"{IMAGES[idx]}")
-            for ii in range(n_nodes):
-                for jj in range(ii):
-                    if ii == jj:
-                        continue
-                    else:
-                        truth = False
-
-                        # try with ii as source
-                        reachable_hii = nx.descendants(horiz_adj, ii)
-                        reachable_vii = nx.descendants(vert_adj, ii)
-
-                        reachable_ii = reachable_hii.union(reachable_vii)
-
-                        truth = truth or (jj in reachable_ii)
-
-                        # try with jj as source
-                        reachable_h = nx.descendants(horiz_adj, jj)
-                        reachable_v = nx.descendants(vert_adj, jj)
-
-                        reachable_jj = reachable_h.union(reachable_v)
-
-                        truth = truth or (ii in reachable_jj)
-
-
-                        if not truth:
-                         print(ii, reachable_hii, reachable_vii)
-                         print(jj, reachable_h, reachable_v, '\n--------------')
+            # n_nodes = len(st.boxes)
+            # print('number of nodes,', n_nodes)
+            # print(f"{IMAGES[idx]}")
+            # for ii in range(n_nodes):
+            #     for jj in range(ii):
+            #         if ii == jj:
+            #             continue
+            #         else:
+            #             truth = False
+            #
+            #             # try with ii as source
+            #             reachable_hii = nx.descendants(horiz_adj, ii)
+            #             reachable_vii = nx.descendants(vert_adj, ii)
+            #
+            #             reachable_ii = reachable_hii.union(reachable_vii)
+            #
+            #             truth = truth or (jj in reachable_ii)
+            #
+            #             # try with jj as source
+            #             reachable_h = nx.descendants(horiz_adj, jj)
+            #             reachable_v = nx.descendants(vert_adj, jj)
+            #
+            #             reachable_jj = reachable_h.union(reachable_v)
+            #
+            #             truth = truth or (ii in reachable_jj)
+            #
+            #
+            #             if not truth:
+            #              print(ii, reachable_hii, reachable_vii)
+            #              print(jj, reachable_h, reachable_v, '\n--------------')
                          # sys.exit()
 
 
 
 
         errors[jj] = bads
-        with open('aug15_bad.json', 'w') as fp:
+        with open('lifull.json', 'w') as fp:
             json.dump(errors, fp, indent=4)
