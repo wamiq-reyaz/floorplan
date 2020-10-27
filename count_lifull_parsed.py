@@ -34,18 +34,25 @@ if __name__ == '__main__':
         graphs_consistent = []
         all_files = []
         tbar = trange(len(IMAGES), desc='nothing', leave=False)
-        yes = 0
+        longest = 0
         print(len(IMAGES))
         print(len(IMAGES))
         for idx in tbar:
-            tbar.set_description(f'length : {yes}')
+            tbar.set_description(f'length : {longest}')
             # tbar.refresh()
             base_file_name = pjoin(IMG_PATH, IMAGES[idx].rstrip('/\n') )
-            fname = base_file_name + '_xyhw.npy'
+            fname = base_file_name + 'negwalllist_all.pkl'
 
             if os.path.exists(fname):
-                yes += 1
+            #     yes += 1
+
+                with open(fname, 'rb') as fd:
+                    walls = pickle.load(fd)
+
+                longest = max(longest, len(walls))
 
 
-        print(yes)
-        print(yes)
+
+
+        # print(yes)
+        # print(yes)
