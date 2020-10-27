@@ -398,8 +398,16 @@ class GPT2Encoder(nn.Module):
         except:
             self.id_embed = False
 
+        try:
+            self.pos_id = self.config.use_pos_emb
+        except:
+            self.pos_id = False
+
         if self.id_embed:
-            self.ide = nn.Embedding(10, config.n_embd)
+            self.ide = nn.Embedding(config.vocab_size+2, config.n_embd)
+
+        if self.pos_id:
+            self.pde = nn.Embedding(config.n_ctx, config.n_embd)
 
         self.init_weights()
 
@@ -527,13 +535,22 @@ class GPT2Encoder(nn.Module):
         # print('Before embeddings')
         if inputs_embeds is None:
             if self.id_embed:
-                id_embeds = self.ide(input_ids[:, 1])
-                other_embeds = self.wte(input_ids[:, 1:])
+                # print(input_ids.shape)
+                # print(input_ids[:, :, 0].shape)
+
+                id_embeds = self.ide(input_ids[:, :, 0].contiguous())
+                # print(id_embeds)
+                inputs_embeds = self.wte(input_ids[:, :, 1:].contiguous())
+                # print(input_ids.shape)
+                # print(id_embeds.shape)
+                # print(inputs_embeds.shape)
             else:
                 id_embeds = 0
                 inputs_embeds = self.wte(input_ids)
             # print(input_ids.shape)
             # print(inputs_embeds.shape)
+            # summed = torch.sum(inputs_embeds, dim=-2)
+            # print(summed.shape)
             inputs_embeds = torch.sum(inputs_embeds, dim=-2) + id_embeds
             # print(inputs_embeds.shape)
 
@@ -541,6 +558,14 @@ class GPT2Encoder(nn.Module):
             token_type_embeds = self.wte(token_type_ids)
         else:
             token_type_embeds = 0
+
+        if self.pos_id:
+            n_ctx = inputs_embeds.shape[1]
+            bs = inputs_embeds.shape[0]
+            pos_tokens = torch.arange(0, n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs, 1)
+            # print(pos_tokens.shape)
+            pos_embeds = self.pde(pos_tokens)
+            inputs_embeds = inputs_embeds + pos_embeds
 
 
         # print('Embedding shapes', inputs_embeds.shape)
