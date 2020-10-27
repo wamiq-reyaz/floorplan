@@ -112,12 +112,72 @@ class Rplan(Dataset):
         return len(self.file_names)
 
 
+class LIFULL(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 seq_len=200,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None):
+        super().__init__()
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.drop_dim = drop_dim
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_xyhw.npy')
+
+        zero_token = np.array(0, dtype=np.uint8)
+        stop_token = np.array([self.vocab_size+1], dtype=np.uint8)
+        full_seq = np.ones(self.seq_len, dtype=np.uint8) * self.vocab_size
+        attention_mask = np.ones(self.seq_len)
+        pos_id = np.arange(self.seq_len, dtype=np.uint8)
+
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            if self.drop_dim:
+                tokens = tokens[:, :3]
+            tokens = tokens.ravel() + 1 # shift original by 1
+            tokens = self.transforms(tokens)
+            tokens = np.hstack((zero_token, tokens, stop_token))
+            length = len(tokens)
+
+            full_seq[:length] = tokens
+            attention_mask[length+1:] = 0.0
+
+        return {'seq': torch.tensor(full_seq).long(),
+                'attn_mask': torch.tensor(attention_mask),
+                'pos_id': torch.tensor(pos_id).long()}
+
+
+    def __len__(self):
+        return len(self.file_names)
+
+
 class RrplanGraph(Dataset):
     def __init__(self, root_dir, split=None,
                  pad_start=True, pad_end=True,
                  seq_len=200,
                  vocab_size=65,
                  edg_len=100,
+                 edg_type='v',
                  transforms=None):
         super().__init__()
         self.root_dir = root_dir
@@ -129,6 +189,7 @@ class RrplanGraph(Dataset):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.edg_len = edg_len
+        self.edg_type = edg_type
 
         if transforms:
             self.transforms = transforms
@@ -147,12 +208,12 @@ class RrplanGraph(Dataset):
 
         horiz_dict_file = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            '_image_nodoor_edge_dict_v.pkl')
+                            f'_image_nodoor_edge_dict_{self.edg_type}.pkl')
 
         if not os.path.exists(horiz_dict_file):
             horiz_dict_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            '_image_nodoor_edge_dict_v.pkl')
+                            f'_image_nodoor_edge_dict_{self.edg_type}.pkl')
             print(horiz_dict_file)
 
         # create the vertex_data first
@@ -302,7 +363,8 @@ class RrplanDoors(Dataset):
                  edg_len=100,
                  transforms=None,
                  dims=5,
-                 doors='all'):
+                 doors='all',
+                 lifull=False):
         # TODO: implement dims and doors strategy
         super().__init__()
         self.root_dir = root_dir
@@ -318,6 +380,13 @@ class RrplanDoors(Dataset):
             raise ValueError('Dims can only be 3 or 5')
         self.dims = dims
         self.doors = doors
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
+
 
         if transforms:
             self.transforms = transforms
@@ -328,34 +397,34 @@ class RrplanDoors(Dataset):
     def __getitem__(self, idx):
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                            self.suffix + '_xyhw.npy')
         if not os.path.exists(path):
             path = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                             self.suffix + '_xyhw.npy')
             print(path)
 
-        suffix = '_image_nodoor'
+
         if self.doors == 'all':
-            suffix += '_doorlist_all.pkl'
+            suffix = '_doorlist_all.pkl'
 
         elif self.doors == 'vert':
-            suffix += '_doorlist_v.pkl'
+            suffix = '_doorlist_v.pkl'
 
         elif self.doors == 'horiz':
-            suffix += '_doorlist_h.pkl'
+            suffix = '_doorlist_h.pkl'
 
         else:
             raise ValueError('The door type is invalid')
 
         door_file = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            suffix)
+                            self.suffix + suffix)
 
         if not os.path.exists(door_file):
             door_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            suffix)
+                            self.suffix + suffix)
             print(door_file)
 
         # create the vertex_data first
@@ -412,7 +481,8 @@ class RrplanWalls(Dataset):
                  edg_len=100,
                  transforms=None,
                  dims=5,
-                 doors='all'):
+                 doors='all',
+                 lifull=False):
         # TODO: implement dims and doors strategy
         super().__init__()
         self.root_dir = root_dir
@@ -428,6 +498,12 @@ class RrplanWalls(Dataset):
             raise ValueError('Dims can only be 3 or 5')
         self.dims = dims
         self.doors = doors
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
 
         if transforms:
             self.transforms = transforms
@@ -438,34 +514,33 @@ class RrplanWalls(Dataset):
     def __getitem__(self, idx):
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                            self.suffix + '_xyhw.npy')
         if not os.path.exists(path):
             path = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                            self.suffix + '_xyhw.npy')
             print(path)
 
-        suffix = '_image_nodoor'
         if self.doors == 'all':
-            suffix += '_walllist_all.pkl'
+            suffix = 'walllist_all.pkl'
 
         elif self.doors == 'vert':
-            suffix += '_walllist_v.pkl'
+            suffix = 'walllist_v.pkl'
 
         elif self.doors == 'horiz':
-            suffix += '_walllist_h.pkl'
+            suffix = 'walllist_h.pkl'
 
         else:
             raise ValueError('The door type is invalid')
 
         door_file = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            suffix)
+                            self.suffix + suffix)
 
         if not os.path.exists(door_file):
             door_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            suffix)
+                            self.suffix + suffix)
             print(door_file)
 
         # create the vertex_data first

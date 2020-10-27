@@ -11,7 +11,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RrplanDoors
+from rplan import RrplanGraph, Flip, Rot90,RrplanWalls
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
@@ -22,7 +22,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'Walls_3'
+PROJECT = 'FixedWalls'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -49,6 +49,8 @@ if __name__ == '__main__':
     # Data
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
+    parser.add_argument('--dataset', default='rplan', type=str, help='dataset to train on')
+    parser.add_argument('--lifull', default=False, type=bool, help='whether to train on lifull data')
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
@@ -56,31 +58,59 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if on_local():
-        args.root_dir = './'
-        args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
+    if args.dataset == 'rplan':
+        if on_local():
+            args.root_dir = './'
+            args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
 
-    else: # assume IBEX
-        args.root_dir = '/ibex/scratch/parawr/floorplan/'
-        args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
+        else: # assume IBEX
+            args.root_dir = '/ibex/scratch/parawr/floorplan/'
+            args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
-    dset = RrplanDoors(root_dir=args.datapath,
-                 split='train',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 dims=args.tuples,
-                 doors=args.doors)
+        dset = RrplanWalls(root_dir=args.datapath,
+                     split='train',
+                     seq_len=args.seq_len,
+                     edg_len=args.edg_len,
+                     vocab_size=args.vocab,
+                     dims=args.tuples,
+                     doors=args.doors)
+
+        val_set = RrplanWalls(root_dir=args.datapath,
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              dims=args.tuples,
+                              doors=args.doors)
+
+    elif args.dataset == 'lifull':
+        if on_local():
+            args.root_dir = './'
+            args.datapath = '/mnt/iscratch/datasets/liful_dgg_var'
+
+        else:  # assume IBEX
+            args.root_dir = '/ibex/scratch/parawr/floorplan/'
+            args.datapath = '/ibex/scratch/parawr/datasets/liful_dgg_var'
+
+        dset = RrplanWalls(root_dir=args.datapath,
+                           split='train',
+                           seq_len=args.seq_len,
+                           edg_len=args.edg_len,
+                           vocab_size=args.vocab,
+                           dims=args.tuples,
+                           doors=args.doors,
+                           lifull=True)
+
+        val_set = RrplanWalls(root_dir=args.datapath,
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              dims=args.tuples,
+                              doors=args.doors,
+                              lifull=True)
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
-
-    val_set = RrplanDoors(root_dir=args.datapath,
-                 split='val',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 dims=args.tuples,
-                 doors=args.doors)
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
 
@@ -127,7 +157,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/walls/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/{args.dataset}_{args.tuples}_fixed_walls/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):

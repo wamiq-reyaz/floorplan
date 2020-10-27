@@ -11,23 +11,33 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 
-from rplan import Rplan, Flip, Rot90
+from rplan import Rplan, Flip, Rot90, LIFULL
 from gpt2 import GPT2Model
 from transformers.configuration_gpt2 import GPT2Config
 
 if __name__ == '__main__':
 
-    dset = Rplan(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
+    # dset = Rplan(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
+    #              split='train',
+    #              seq_len=200,
+    #              vocab_size=65)
+
+    dset = LIFULL(root_dir='/mnt/iscratch/datasets/lifull_ddg_var',
                  split='train',
                  seq_len=200,
                  vocab_size=65)
 
     dloader = DataLoader(dset, batch_size=64, num_workers=10, shuffle=True)
 
-    val_set = Rplan(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
-                 split='val',
-                 seq_len=200,
-                 vocab_size=65)
+    # val_set = Rplan(root_dir='/mnt/iscratch/datasets/rplan_ddg_var',
+    #                 split='val',
+    #                 seq_len=200,
+    #                 vocab_size=65)
+
+    val_set = LIFULL(root_dir='/mnt/iscratch/datasets/lifull_ddg_var',
+                    split='val',
+                    seq_len=200,
+                    vocab_size=65)
 
     val_loader = DataLoader(val_set, batch_size=64, num_workers=10)
 
@@ -36,7 +46,7 @@ if __name__ == '__main__':
         n_positions=200,
         n_ctx=200,
         n_embd=264,
-        n_layer=20,
+        n_layer=12,
         n_head=12,
         is_causal=True,
         is_encoder=False,
@@ -49,11 +59,11 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=1e-4)
     lr_scheduler = StepLR(optimizer, step_size=15, gamma=0.1)
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(comment='The base 5 tuple lifull model')
 
     global_steps = 1
     val_steps = 1
-    for epochs in range(40):
+    for epochs in range(80):
         model.train()
         for steps, data in tqdm(enumerate(dloader)):
             global_steps += 1
@@ -74,7 +84,7 @@ if __name__ == '__main__':
             if steps % 100 == 0:
                 writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
 
-        torch.save(model.state_dict(), f'20_aug_logged_{epochs}.pth')
+        torch.save(model.state_dict(), f'lifull_aug_logged_{epochs}.pth')
 
         lr_scheduler.step()
         model.eval()

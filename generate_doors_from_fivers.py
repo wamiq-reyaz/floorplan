@@ -104,14 +104,15 @@ if __name__ == '__main__':
     parser.add_argument('--input_dir', default='../data/results/5_tuples_t_0.8/boxes', type=str, help='input directory (containing samples)')
     parser.add_argument('--output_dir', default='../data/results/5_tuples_t_0.8/wall_edges', type=str, help='output directory (will contain samples with added edges)')
     parser.add_argument('--model_path', default='../data/models/walls/model_doors_eps_m6_mlp_lr_m4_039.pth', type=str, help='location of the model weights file')
-    parser.add_argument('--model_args_path', default='../data/models/walls/args.json', type=str, help='location of the arguments the model was trained with (needed to reconstruct the model)')
+    parser.add_argument('--model_args_path', default='', type=str, help='location of the arguments the model was trained with (needed to reconstruct the model)')
     args = parser.parse_args()
 
     # load training arguments (these overwrite the defaults, but are overwritten by any parameter set in the command line)
-    with open(args.model_args_path, 'r') as f:
-        model_args = json.load(f)
-    parser.set_defaults(
-        **{arg_name: arg_val for arg_name, arg_val in model_args.items() if arg_name in vars(args).keys()})
+    if args.model_args_path != '':
+        with open(args.model_args_path, 'r') as f:
+            model_args = json.load(f)
+        parser.set_defaults(
+            **{arg_name: arg_val for arg_name, arg_val in model_args.items() if arg_name in vars(args).keys()})
 
     args = parser.parse_args()
 
@@ -183,16 +184,17 @@ if __name__ == '__main__':
         for ii in range(48):
             position_ids = torch.arange(ii+1, dtype=torch.long, device=device).unsqueeze(0).repeat(bs, 1)
             attn_mask = torch.ones(ii+1, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
-            loss = model(node=vert_seq,
-                         edg=input_ids,
-                         attention_mask=attn_mask,
-                         labels=None,
-                         vert_attn_mask=vert_attn_mask
-                         )
+            with torch.no_grad():
+                loss = model(node=vert_seq,
+                             edg=input_ids,
+                             attention_mask=attn_mask,
+                             labels=None,
+                             vert_attn_mask=vert_attn_mask
+                             )
 
-            logits = loss[1][:, ii, :]
-            probs = torch.softmax(logits.squeeze(), dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
+                logits = loss[1][:, ii, :]
+                probs = torch.softmax(logits.squeeze(), dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
             # print('in generate probs, next_token', probs.shape, next_token.shape)
 
 
@@ -206,7 +208,7 @@ if __name__ == '__main__':
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] # drop 0
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
-        print(samples)
+        # print(samples)
 
         for jj, ss in enumerate(samples):
             full_name =  data['file_name'][jj]

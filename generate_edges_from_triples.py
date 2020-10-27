@@ -17,7 +17,7 @@ from transformers.configuration_gpt2 import GPT2Config
 from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
-
+import argparse
 
 
 def parse_edge_seq(seq):
@@ -58,8 +58,15 @@ def parse_vert_seq(seq):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--kind', default='', type=str, help='v or h . Edge type to sample')
+    parser.add_argument('--temp', default=1.0, type=float, help='Sampling temperature')
+    parser.add_argument('--samples', default=None, type=str, help= 'The three tuple samples')
+    parser = parser.parse_args()
+
+
     BATCH_SIZE = 30
-    dset = RrplanNPZTriples(root_dir='/home/parawr/Projects/floorplan/samples/triples_0.5',
+    dset = RrplanNPZTriples(root_dir=f'/home/parawr/Projects/floorplan/samples/{parser.samples}',
                  seq_len=120,
                  edg_len=100,
                  vocab_size=65)
@@ -92,7 +99,11 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('/home/parawr/Projects/floorplan/models/face_model_eps_m6_mlp_lr_m4/face_model_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    if parser.kind == 'v':
+        suffix = 'v'
+    else:
+        suffix = ''
+    ckpt = torch.load(f'/home/parawr/Projects/floorplan/models/face_model{suffix}_eps_m6_mlp_lr_m4/face_model{suffix}_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -109,8 +120,10 @@ if __name__ == '__main__':
 
 
     bs = BATCH_SIZE
+    num_iter  = len(dloader)
+    temperature = parser.temp
 
-    for jj, data in tqdm(enumerate(dloader)):
+    for jj, data in tqdm(enumerate(dloader), total=num_iter):
 
         vert_seq = data['vert_seq'].cuda()
         vert_attn_mask = data['vert_attn_mask'].cuda()
@@ -121,17 +134,17 @@ if __name__ == '__main__':
         for ii in range(100):
             position_ids = torch.arange(ii+1, dtype=torch.long).cuda().unsqueeze(0).repeat(bs, 1)
             attn_mask = torch.ones(ii+1, dtype=torch.float).cuda().unsqueeze(0).repeat(bs, 1)
-            loss = model(node=vert_seq,
-                         edg=input_ids,
-                         attention_mask=attn_mask,
-                         labels=None,
-                         vert_attn_mask=vert_attn_mask
-                         )
+            with torch.no_grad():
+                loss = model(node=vert_seq,
+                             edg=input_ids,
+                             attention_mask=attn_mask,
+                             labels=None,
+                             vert_attn_mask=vert_attn_mask
+                             )
 
-            logits = loss[1][:, ii, :]
-            probs = torch.softmax(logits.squeeze(), dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
-            # print('in generate probs, next_token', probs.shape, next_token.shape)
+                logits = loss[1][:, ii, :] / temperature
+                probs = torch.softmax(logits.squeeze(), dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
 
 
 
@@ -145,7 +158,7 @@ if __name__ == '__main__':
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
 
-        SAVE_DIR = os.path.join('samples', 'triples_0.5', 'edges', 'h')
+        SAVE_DIR = os.path.join('samples', parser.samples, 'edges', f'{parser.kind}_{parser.temp:0.1f}')
         if not os.path.exists(SAVE_DIR):
             os.makedirs(SAVE_DIR, exist_ok=True)
         for jj, ss in enumerate(samples):

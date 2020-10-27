@@ -31,7 +31,7 @@ if __name__ == '__main__':
         n_positions=120,
         n_ctx=120,
         n_embd=264,
-        n_layer=12,
+        n_layer=14,
         n_head=12,
         is_causal=True,
         is_encoder=False,
@@ -42,7 +42,11 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('/home/parawr/Projects/floorplan/models/triples/triples_39.pth', map_location='cpu')
+    ckpt = torch.load('/mnt/iscratch/floorplan/models/triples_xy/'
+                      'GraphGPTxy-22-Oct_17-59-bs144-lr7.736186230731716e-'
+                      '05-enl14-decl12-dim_embed264-17dede1d-3d71-4d98-ab08'
+                      '-ac665b0b6121/'
+                      'triples_hw3_best.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -69,7 +73,7 @@ if __name__ == '__main__':
 
     bs = 20
     sample_idx = 1
-    temperature = 0.5
+    temperature = 0.9
     for jj in tqdm(range(500)):
         input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
         for ii in range(120):
@@ -106,7 +110,7 @@ if __name__ == '__main__':
                 boxes = curr_sample[:stop_token_idx].reshape((-1, 3)) - 1
 
             curr_time = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-            file_name = '/home/parawr/Projects/floorplan/samples/triples_0.5/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
+            file_name = '/home/parawr/Projects/floorplan/samples/v2_tuned_triples_0.9/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
             np.savez(file_name, boxes)
 
 

@@ -12,27 +12,34 @@ def load_pickle(fname):
         return pickle.load(fd)
 
 if __name__ == '__main__':
-    ROOT_DIR = '/home/parawr/Projects/floorplan/samples/triples_0.5/'
+    ROOT_DIR = '/home/parawr/Projects/floorplan/samples/v2_tuned_triples_0.9/'
     verts = natsorted(glob(os.path.join(ROOT_DIR, '*.npz')))
     print(len(verts))
 
-    curr_file = verts[4791] #.replace('temp_0.5', 'temp_1.0')
+    curr_file = verts[4140] #.replace('temp_0.9', 'temp_1.0')
+    print(curr_file)
     base_name = os.path.basename(curr_file)
     root_name = os.path.splitext(base_name)[0]
 
-    horiz_file = os.path.join('./samples/triples_0.5', 'edges', 'h', root_name + '.pkl')
-    vert_file = os.path.join('./samples/triples_0.5', 'edges', 'v', root_name + '.pkl')
+    horiz_file = os.path.join('./samples/v2_tuned_triples_0.9', 'edges', 'h_1.0', root_name + '.pkl')
+    vert_file = os.path.join('./samples/v2_tuned_triples_0.9', 'edges', 'v_1.0', root_name + '.pkl')
 
 
     horiz_edges = load_pickle(horiz_file)
     vert_edges = load_pickle(vert_file)
 
-    vertices = np.load(curr_file)['arr_0']
-
-    print(vertices)
-    print(horiz_edges)
     print(vert_edges)
+    import networkx as nx
+    from networkx.drawing.nx_agraph import write_dot
+    graph = nx.DiGraph()
+    graph.add_edges_from(vert_edges)
+    write_dot(graph, 'graph.dot')
+    # nx.draw(graph)
+    # import matplotlib.pyplot as plt
+    # plt.show()
 
+    vertices = np.load(curr_file)['arr_0']
+    # print(vertices)
     from node import Node, Floor, LPSolver
     from random import random as rand
 
@@ -54,6 +61,7 @@ if __name__ == '__main__':
 
     floor.add_horiz_constraints(horiz_edges)
     floor.add_vert_constraints(vert_edges)
+    floor.clear_self_loops()
 
     solver = LPSolver(floor)
     solver._add_xloc_constraints(widths, eps=0)

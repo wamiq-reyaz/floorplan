@@ -116,7 +116,7 @@ if __name__ == '__main__':
     # writer = SummaryWriter(comment='intial_door_model_5_tuple')\
 
 
-    run_id = "GraphGPT-{}----tuples{}-bs{}-lr{:0.5f}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'), args.tuples,
+    run_id = "GraphGPT-{}----adj_{}-bs{}-lr{:0.5f}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'), args.adj,
                                                                       args.bs, args.lr, args.enc_layer, args.dec_layer,
                                                                       args.dim, uuid.uuid4())
     wandb.init(project=PROJECT, name=run_id, config=args, dir=".", save_code=True, notes=args.notes)
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/walls/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/adj_{args.adj}/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
