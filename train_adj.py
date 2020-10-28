@@ -11,7 +11,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RrplanGraph
+from rplan import RrplanGraph, Flip, Rot90,RrplanGraph, LIFULLGraph
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
@@ -30,13 +30,13 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
     parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
-    parser.add_argument('--edg_len', default=100, type=int, help='how long is the edge length or door length')
+    parser.add_argument('--edg_len', default=170, type=int, help='how long is the edge length or door length')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
     parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
     parser.add_argument('--adj', default='h', type=str, help='h/v/all doors')
     parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=100, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=170, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
 
 
@@ -49,6 +49,7 @@ if __name__ == '__main__':
     # Data
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
+    parser.add_argument('--lifull', default=False, type=bool)
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
@@ -59,29 +60,51 @@ if __name__ == '__main__':
     if on_local():
         args.root_dir = './'
         args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
+        if args.lifull:
+            args.datapath = '/mnt/iscratch/datasets/lifull_ddg_var'
 
     else: # assume IBEX
         args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
+        if args.lifull:
+            args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
 
-    dset = RrplanGraph(root_dir=args.datapath,
-                 split='train',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 edg_type=args.adj)
+    if not args.lifull:
+        dset = RrplanGraph(root_dir=args.datapath,
+                    split='train',
+                    seq_len=args.seq_len,
+                    edg_len=args.edg_len,
+                    vocab_size=args.vocab,
+                    edg_type=args.adj)
+        val_set = RrplanGraph(root_dir=args.datapath,
+                    split='val',
+                    seq_len=args.seq_len,
+                    edg_len=args.edg_len,
+                    vocab_size=args.vocab,
+                    edg_type=args.adj)
+    
+    else:
+        dset = LIFULLGraph(root_dir=args.datapath,
+                    split='train',
+                    seq_len=args.seq_len,
+                    edg_len=args.edg_len,
+                    vocab_size=args.vocab,
+                    edg_type=args.adj)
+        val_set = LIFULLGraph(root_dir=args.datapath,
+                    split='val',
+                    seq_len=args.seq_len,
+                    edg_len=args.edg_len,
+                    vocab_size=args.vocab,
+                    edg_type=args.adj)
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
 
-    val_set = RrplanGraph(root_dir=args.datapath,
-                 split='val',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 edg_type=args.adj)
-
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
-
+    # for ii in tqdm(dloader):
+    #     pass
+    # for ii in tqdm(val_loader):
+    #     pass
+    # sys.exit()
     enc = GPT2Config(
         vocab_size=args.vocab,
         n_positions=args.enc_n,
@@ -125,7 +148,8 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/adj_{args.adj}/' + run_id + '/'
+    prefix = 'lifull' if args.lifull else ''
+    SAVE_LOCATION = args.root_dir + f'models/{prefix}_adj_{args.adj}/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):

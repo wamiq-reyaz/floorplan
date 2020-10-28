@@ -16,4 +16,5 @@
 
 conda activate faclab
 
-wandb agent wamreyaz/FixedWalls/oljxamdx
+# wandb agent wamreyaz/FixedWalls/oljxamdx
+wandb agent wamreyaz/FixedWalls/lgqhary9
