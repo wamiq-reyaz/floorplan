@@ -1,4 +1,5 @@
 import matplotlib
+import os
 # matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import  Polygon
@@ -146,8 +147,10 @@ class Floor(object):
             ))
 
     def load_optimized_tuple(self, fname):
+         print('File size', os.path.getsize(fname))
          with open(fname, 'rb') as fd:
-             floor = np.load(fname)
+
+             floor = np.load(fname, allow_pickle=True)
              # floor[:, 1:] = floor[:, 1:]*64
              # floor = floor.astype(np.uint8)
          return floor
@@ -1029,7 +1032,7 @@ class SplittingTree(object):
 
         return self.vert_door
 
-    def find_horiz_wall(self):
+    def find_horiz_wall(self, mode='positive'):
         self.horiz_wall = nx.DiGraph()
         self.horiz_wall.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
 
@@ -1038,15 +1041,18 @@ class SplittingTree(object):
                 if source_idx == dest_idx:
                     continue
 
-                if self._is_hjoint_wall(node, dnode):  # or dnode.is_vadj(node):
+                if mode == 'positive':
+                    val = self._is_hjoint_wall(node, dnode)
+                else:
+                    val = not self._is_hjoint_wall(node, dnode)
+
+                if val :  # or dnode.is_vadj(node):
                     self.horiz_wall.add_edge(source_idx, dest_idx)
 
         return self.horiz_wall
 
 
-
-
-    def find_vert_wall(self):
+    def find_vert_wall(self, mode='positive'):
         self.vert_wall = nx.DiGraph()
         self.vert_wall.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])
 
@@ -1055,7 +1061,12 @@ class SplittingTree(object):
                 if source_idx == dest_idx:
                     continue
 
-                if self._is_vjoint_wall(node, dnode):  # or dnode.is_vadj(node):
+                if mode == 'positive':
+                    val = self._is_vjoint_wall(node, dnode)
+                else:
+                    val = not self._is_vjoint_wall(node, dnode)
+
+                if val:  # or dnode.is_vadj(node):
                     self.vert_wall.add_edge(source_idx, dest_idx)
 
         return self.vert_wall

@@ -1,6 +1,6 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --array=0-10
+#SBATCH --array=0-7
 #SBATCH --export=ALL,NCCL_SOCKET_IFNAME=eth0
 #SBATCH --partition=batch
 #SBATCH -J walls
@@ -16,4 +16,5 @@
 
 conda activate faclab
 
-wandb agent wamreyaz/adj/mumwrwfw
+# wandb agent wamreyaz/adj/mumwrwfw #rplan
+wandb agent wamreyaz/adj/nnroevww #lifull

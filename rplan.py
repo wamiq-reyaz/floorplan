@@ -261,6 +261,95 @@ class RrplanGraph(Dataset):
         return len(self.file_names)
 
 
+class LIFULLGraph(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 seq_len=200,
+                 vocab_size=65,
+                 edg_len=100,
+                 edg_type='v',
+                 transforms=None):
+        super().__init__()
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.edg_len = edg_len
+        self.edg_type = edg_type
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_xyhw.npy')
+            print(path)
+
+        horiz_dict_file = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            f'_edgelist_{self.edg_type}.pkl')
+
+        if not os.path.exists(horiz_dict_file):
+            horiz_dict_file = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            f'_edgelist_{self.edg_type}.pkl')
+            print(horiz_dict_file)
+
+        # create the vertex_data first
+        with open(path, 'rb') as f:
+            tokens = np.load(path) + 1 # shift original by 1
+            tokens = tokens[:, :3] # drop h and w
+            tokens = self.transforms(tokens)
+            length = len(tokens)
+
+        vert_seq = np.ones((self.seq_len, 3), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0, 0, 0)
+        vert_seq[2:length+2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length+2] = 1
+
+        flat_list = []
+        with open(horiz_dict_file, 'rb') as f:
+            edg_list = pickle.load(f) # shift original by 1
+            # print(dict_edg)
+            for sublist in edg_list():
+                flat_list += list(sublist)
+                flat_list += [-1]
+            flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
+            length = len(flat_list)
+
+        edg_seq = np.ones(self.edg_len) * -2
+
+        # print(flat_list)
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+    def __len__(self):
+        return len(self.file_names)
+
 class RrplanNPZTriples(Dataset):
     def __init__(self, root_dir, split=None,
                  pad_start=True, pad_end=True,

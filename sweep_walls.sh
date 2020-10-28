@@ -1,9 +1,9 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --array=0-40
+#SBATCH --array=0-7
 #SBATCH --export=ALL,NCCL_SOCKET_IFNAME=eth0
 #SBATCH --partition=batch
-#SBATCH -J walls
+#SBATCH -J rplan5walls
 #SBATCH --cores-per-socket=5
 #SBATCH -o slurm/%A_%a.out
 #SBATCH -e slurm/%A_%a.err
@@ -16,4 +16,5 @@
 
 conda activate faclab
 
-wandb agent wamreyaz/Walls/5wg0l8sm
+#wandb agent wamreyaz/Walls/5wg0l8sm Old actually only retrains doors. Shit
+wandb agent wamreyaz/FixedWalls/2h9tg04o # trains rplan 5 tuple model

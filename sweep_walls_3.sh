@@ -3,7 +3,7 @@
 #SBATCH --array=0-7
 #SBATCH --export=ALL,NCCL_SOCKET_IFNAME=eth0
 #SBATCH --partition=batch
-#SBATCH -J walls
+#SBATCH -J rplan3walls
 #SBATCH --cores-per-socket=5
 #SBATCH -o slurm/%A_%a.out
 #SBATCH -e slurm/%A_%a.err
@@ -16,5 +16,6 @@
 
 conda activate faclab
 
-# wandb agent wamreyaz/adj/5ka8q9ql #rplan
-wandb agent wamreyaz/adj/naceh1c5
+#wandb agent wamreyaz/Walls/5wg0l8sm Old actually only retrains doors. Shit
+#wandb agent wamreyaz/FixedWalls/2h9tg04o # trains rplan 5 tuple model
+wandb agent wamreyaz/FixedWalls/vu8kbe87 # rplan 3 tuple model

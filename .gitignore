@@ -1,1 +1,17 @@
 __pycache__
+# artifact files
+*.pth
+*.png
+*.zip
+
+# temporary directories
+runs/
+samples/
+slurm/
+walls/
+wandb/
+models/
+.idea/
+.models/
+doors/
+

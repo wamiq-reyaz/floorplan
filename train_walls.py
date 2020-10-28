@@ -1,6 +1,8 @@
 import os, sys
 import numpy as np
 import torch
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
@@ -57,6 +59,8 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str, help="Wandb tags")
 
     args = parser.parse_args()
+    if args.lifull:
+        args.dataset = 'lifull'
 
     if args.dataset == 'rplan':
         if on_local():
@@ -86,11 +90,11 @@ if __name__ == '__main__':
     elif args.dataset == 'lifull':
         if on_local():
             args.root_dir = './'
-            args.datapath = '/mnt/iscratch/datasets/liful_dgg_var'
+            args.datapath = '/mnt/iscratch/datasets/lifull_dgg_var'
 
         else:  # assume IBEX
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
-            args.datapath = '/ibex/scratch/parawr/datasets/liful_dgg_var'
+            args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
 
         dset = RrplanWalls(root_dir=args.datapath,
                            split='train',
