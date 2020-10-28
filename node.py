@@ -1044,6 +1044,8 @@ class SplittingTree(object):
         return self.horiz_wall
 
 
+
+
     def find_vert_wall(self):
         self.vert_wall = nx.DiGraph()
         self.vert_wall.add_nodes_from([(ii, {'idx':self.boxes[ii].idx}) for ii in range(len(self.boxes))])

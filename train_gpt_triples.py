@@ -12,7 +12,7 @@ from tqdm import tqdm
 import argparse
 from utils import on_local
 
-from rplan import Rplan, Flip, Rot90
+from rplan import Rplan, Flip, Rot90, LIFULL
 from gpt2 import GPT2Model
 from transformers.configuration_gpt2 import GPT2Config
 import wandb
@@ -58,14 +58,22 @@ if __name__ == '__main__':
 
     if on_local():
         args.root_dir = './'
-        args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
+        # args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
+        args.datapath = '/mnt/iscratch/datasets/lifull_ddg_var'
+
 
     else:  # assume IBEX
         args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
 
-    dset = Rplan(root_dir=args.datapath,
+    # dset = Rplan(root_dir=args.datapath,
+    #              split='train',
+    #              seq_len=120,
+    #              vocab_size=65,
+    #              drop_dim=True)
+
+    dset = LIFULL(root_dir=args.datapath,
                  split='train',
                  seq_len=120,
                  vocab_size=65,
@@ -73,7 +81,13 @@ if __name__ == '__main__':
 
     dloader = DataLoader(dset, batch_size=64, num_workers=10, shuffle=True)
 
-    val_set = Rplan(root_dir=args.datapath,
+    # val_set = Rplan(root_dir=args.datapath,
+    #              split='val',
+    #              seq_len=120,
+    #              vocab_size=65,
+    #             drop_dim=True)
+
+    val_set = LIFULL(root_dir=args.datapath,
                  split='val',
                  seq_len=120,
                  vocab_size=65,
@@ -109,7 +123,9 @@ if __name__ == '__main__':
     global_steps = 1
     val_steps = 1
 
-    SAVE_LOCATION = args.root_dir + f'models/triples_xy/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/lifull_triples_xy/' + run_id + '/'
+    if not os.path.exists(SAVE_LOCATION):
+        os.makedirs(SAVE_LOCATION, exist_ok=True)
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
