@@ -105,6 +105,70 @@ def pairwise(iterable):
 def on_local():
     if socket.gethostname() == 'PC-KW-60046':
         return True
+def parse_wall_or_door_seq(seq):
+    curr_node = 0
+    edge_list = []
+
+    seq_biased = seq - 2
+
+    # drop all -1
+    seq_as_list = list(seq_biased.ravel())
+    seq_dropped = [s for s in seq_as_list if s != -1]
+    # print(seq_dropped)
+
+    seq_dropped_np = np.array(seq_dropped, dtype=np.int)
+    stop_idx = np.argmin(seq_dropped_np)
+    # print(stop_idx)
+    seq_dropped_np = seq_dropped_np[:stop_idx]
+
+    seq_final = list(seq_dropped_np.ravel())
+    len_seq = len(seq_dropped_np)
+
+    if len_seq % 2 != 0:
+        print('yikes! this sample is bad')
+        return 0
+
+    seq_dropped_np = seq_dropped_np.reshape((-1, 2))
+
+    num_edges = seq_dropped_np.shape[0]
+
+    for ii in range(num_edges):
+        curr_edg = tuple(list(seq_dropped_np[ii, :].ravel()))
+        edge_list.append(curr_edg)
+
+    return edge_list
+
+def parse_edge_seq(seq):
+    curr_node = 0
+    edge_list = []
+
+    seq_biased = seq - 2
+    for elem in seq_biased:
+        if elem == -1:
+            curr_node += 1
+            continue
+        elif elem == -2:
+            break
+        else:
+            edge_list.append((curr_node, elem))
+
+    return edge_list
+
+def parse_vert_seq(seq):
+    if isinstance(seq, torch.Tensor):
+        try:
+            seq = seq.cpu().numpy()
+        except:
+            seq = seq.numpy()
+
+    # print(seq)
+    # first slice the head off
+    seq = seq[2:, :]
+
+    #find the max along any axis of id, x, y
+    stop_token_idx = np.argmax(seq[:, 0])
 
 
+    boxes = seq[:stop_token_idx, :] - 1
 
+    return boxes

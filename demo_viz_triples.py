@@ -14,7 +14,7 @@ if __name__ == '__main__':
 
 
     aa = Floor()
-    bb = aa.load_optimized_tuple(samples[1201])
+    bb = aa.load_optimized_tuple(samples[0])
     f = plt.figure(dpi=80, figsize=(8,8))
 
     aa.from_array(bb)

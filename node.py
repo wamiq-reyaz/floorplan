@@ -1,4 +1,5 @@
 import matplotlib
+import os
 # matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import  Polygon
@@ -146,8 +147,10 @@ class Floor(object):
             ))
 
     def load_optimized_tuple(self, fname):
+         print('File size', os.path.getsize(fname))
          with open(fname, 'rb') as fd:
-             floor = np.load(fname)
+
+             floor = np.load(fname, allow_pickle=True)
              # floor[:, 1:] = floor[:, 1:]*64
              # floor = floor.astype(np.uint8)
          return floor
