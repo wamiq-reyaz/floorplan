@@ -14,63 +14,7 @@ from transformers.configuration_gpt2 import GPT2Config
 from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
-
-
-
-def parse_edge_seq(seq):
-    curr_node = 0
-    edge_list = []
-
-    seq_biased = seq - 2
-
-    # drop all -1
-    seq_as_list = list(seq_biased.ravel())
-    seq_dropped = [s for s in seq_as_list if s != -1]
-    # print(seq_dropped)
-
-    seq_dropped_np = np.array(seq_dropped, dtype=np.int)
-    stop_idx = np.argmin(seq_dropped_np)
-    # print(stop_idx)
-    seq_dropped_np = seq_dropped_np[:stop_idx]
-
-    seq_final = list(seq_dropped_np.ravel())
-    len_seq = len(seq_dropped_np)
-
-    if len_seq % 2 != 0:
-        print('yikes! this sample is bad')
-        return 0
-
-    # print(seq_dropped_np)
-    seq_dropped_np = seq_dropped_np.reshape((-1, 2))
-
-    num_edges = seq_dropped_np.shape[0]
-    # print(num_edges)
-
-    for ii in range(num_edges):
-        curr_edg = tuple(list(seq_dropped_np[ii, :].ravel()))
-        edge_list.append(curr_edg)
-
-    return edge_list
-
-def parse_vert_seq(seq):
-    if isinstance(seq, torch.Tensor):
-        try:
-            seq = seq.cpu().numpy()
-        except:
-            seq = seq.numpy()
-
-    # print(seq)
-    # first slice the head off
-    seq = seq[2:, :]
-
-    #find the max along any axis of id, x, y
-    stop_token_idx = np.argmax(seq[:, 0])
-
-
-    boxes = seq[:stop_token_idx, :] - 1
-
-    return boxes
-
+from utils import parse_wall_or_door_seq, parse_vert_seq
 
 
 if __name__ == '__main__':
@@ -219,4 +163,4 @@ if __name__ == '__main__':
             save_path = os.path.join(args.output_dir, root_name + '.pkl')
 
             with open(save_path, 'wb') as fd:
-                pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(parse_wall_or_door_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)

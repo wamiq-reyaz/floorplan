@@ -18,42 +18,8 @@ from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
 import argparse
-
-
-def parse_edge_seq(seq):
-    curr_node = 0
-    edge_list = []
-
-    seq_biased = seq - 2
-    for elem in seq_biased:
-        if elem == -1:
-            curr_node += 1
-            continue
-        elif elem == -2:
-            break
-        else:
-            edge_list.append((curr_node, elem))
-
-    return edge_list
-
-def parse_vert_seq(seq):
-    if isinstance(seq, torch.Tensor):
-        try:
-            seq = seq.cpu().numpy()
-        except:
-            seq = seq.numpy()
-
-    # print(seq)
-    # first slice the head off
-    seq = seq[2:, :]
-
-    #find the max along any axis of id, x, y
-    stop_token_idx = np.argmax(seq[:, 0])
-
-
-    boxes = seq[:stop_token_idx, :] - 1
-
-    return boxes
+from utils import parse_wall_or_door_seq, parse_vert_seq,
+                  parse_edge_seq
 
 
 
