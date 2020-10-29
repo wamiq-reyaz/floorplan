@@ -98,61 +98,72 @@ if __name__ == '__main__':
     import os
     from load_boxes import get_sample_names, load_boxes
     from convert_boxes_to_rooms import convert_boxes_to_rooms, room_type_colors
-    from node import Floor
     from tqdm import tqdm
     import torchvision
-    import math
 
-    # input_dir = '../data/results/5_tuples_t_0.8_minimal'
-    # output_dir = '../data/results/5_tuples_t_0.8_minimal/vis'
-    # input_list = None
-    # suffix = ''
+    result_sets = [
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_0.9.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_0.9_doors_0.9_walls_0.9'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_1.0.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_0.9_doors_0.9_walls_1.0'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_0.9.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_0.9_doors_1.0_walls_0.9'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_1.0.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_0.9_doors_1.0_walls_1.0'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_0.9.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_1.0_doors_0.9_walls_0.9'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_1.0.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_1.0_doors_0.9_walls_1.0'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_0.9.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_1.0_doors_1.0_walls_0.9'},
+        # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_1.0.txt', 'output_dir': '../data/results/5_tuple_on_rplan_vis/temp_1.0_doors_1.0_walls_1.0'},
+        
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_1.0_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_1.0_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_0.9_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_0.9_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_1.0_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_1.0_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_0.9_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_0.9_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_0.9.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_1.0_walls_0.9'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_1.0.txt', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_1.0_walls_1.0'},
 
-    input_dir = '../data/results/5_tuples_t_0.8'
-    output_dir = '../data/results/5_tuples_t_0.8/vis'
-    input_list = None
-    suffix = ''
+        # {'box_dir': '../data/results/rplan_on_rplan', 'sample_list': '../data/results/rplan_on_rplan/all.txt', 'output_dir': '../data/results/rplan_on_rplan_vis'},
+        # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'output_dir': '../data/results/rplan_on_lifull_vis'},
+        
+        # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'output_dir': '../data/results/gt_on_rplan_vis'},
+        # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'output_dir': '../data/results/gt_on_lifull_vis'},
+    ]
+    
+    for rsi, result_set in enumerate(result_sets):
 
-    # input_dir = '/home/guerrero/scratch_space/floorplan/rplan_ddg_var'
-    # output_dir = '/home/guerrero/scratch_space/floorplan/rplan_ddg_var_vis'
-    # input_list = '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt'
-    # suffix='_image_nodoor'
+        box_dir = result_set['box_dir']
+        door_dir = result_set['door_dir'] if 'door_dir' in result_set else None
+        wall_dir = result_set['wall_dir'] if 'wall_dir' in result_set else None
+        sample_list = result_set['sample_list'] if 'sample_list' in result_set else None
+        suffix = result_set['suffix'] if 'suffix' in result_set else ''
+        output_dir = result_set['output_dir']
 
-    # input_dir = '../data/results/rplan_var_images_doors'
-    # output_dir = '../data/results/rplan_var_images_doors_vis'
-    # input_list = '../data/results/rplan_var_images_doors/all.txt'
-    # suffix=''
+        print(f'result set [{rsi+1}/{len(result_sets)}]: {output_dir}')
+    
+        # read the boxes and edges of all floor plans in the input directory
+        sample_names = get_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list)
 
-    os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
 
-    # read the boxes and edges of all floor plans in the input directory
-    sample_names, sample_format = get_sample_names(input_dir=input_dir, input_list=input_list)
+        for sample_name in tqdm(sample_names):
+            boxes, door_edges, wall_edges, sample_names = load_boxes(sample_names=[sample_name], box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
 
-    for sample_name in tqdm(sample_names):
-        boxes, door_edges, wall_edges, sample_names = load_boxes(input_dir=input_dir, sample_names=[sample_name], format=sample_format, suffix=suffix)
-
-        try:
+            # try:
+            # this should already be filtered, so we should get no parsing errors here
             room_types, room_bboxes, room_door_adj, room_masks = convert_boxes_to_rooms(
                 boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=room_type_colors.shape[0])
-        except ValueError as err:
-            print(f'WARNING: could not parse sample {sample_name}:\n{err}')
-            continue
+            # except ValueError as err:
+            #     print(f'WARNING: could not parse sample {sample_name}:\n{err}')
+            #     continue
 
-        image = render_floorplans(
-            room_masks=room_masks,
-            room_type_idx=room_types,
-            room_door_adj=[a.unsqueeze(0) for a in room_door_adj],
-            room_type_colors=torch.tensor(room_type_colors))
+            image = render_floorplans(
+                room_masks=room_masks,
+                room_type_idx=room_types,
+                room_door_adj=[a.unsqueeze(0) for a in room_door_adj],
+                room_type_colors=torch.tensor(room_type_colors))
 
-        out_filename = os.path.join(output_dir, f'{sample_name}.png')
-        os.makedirs(os.path.dirname(out_filename), exist_ok=True)
-        torchvision.utils.save_image(image, out_filename)
-
-    # image = render_floorplans(
-    #     room_masks=[room_masks[0]],
-    #     room_type_idx=[room_types[0]],
-    #     room_door_adj=[room_door_adj[0].unsqueeze(0)],
-    #     room_type_colors=torch.tensor(room_type_colors))[0]
-
-    # import torchvision
-    # torchvision.utils.save_image(image, '/home/guerrero/scratch_space/floorplan/test_floorplan_render.png')
+            out_filename = os.path.join(output_dir, f'{sample_name}.png')
+            os.makedirs(os.path.dirname(out_filename), exist_ok=True)
+            torchvision.utils.save_image(image, out_filename)

@@ -718,7 +718,7 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, filename=None)
 
     # return figs
 
-def compute_egraph_set_stats(out_filename, input_dir, input_list, suffix, label_count, exclude_types):
+def compute_egraph_set_stats(out_filename, box_dir, door_dir, wall_dir, sample_list, suffix, label_count, exclude_types):
 
     # egraph_names = []
     # with open(egraph_list_filename) as f:
@@ -727,18 +727,19 @@ def compute_egraph_set_stats(out_filename, input_dir, input_list, suffix, label_
     # egraph_names = list(filter(None, egraph_names))
     # egraph_names = [os.path.join(egraph_dir, gn+egraph_suffix) for gn in egraph_names]
 
-    sample_names, sample_format = get_sample_names(input_dir=input_dir, input_list=input_list)
+    sample_names = get_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list)
 
     set_stats = None
     for sample_name in tqdm(sample_names):
-        boxes, door_edges, wall_edges, sample_names = load_boxes(input_dir=input_dir, sample_names=[sample_name], format=sample_format, suffix=suffix)
+        boxes, door_edges, wall_edges, sample_names = load_boxes(sample_names=[sample_name], box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
 
-        try:
-            room_types, room_bboxes, room_door_adj, room_masks = convert_boxes_to_rooms(
-                boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=label_count)
-        except ValueError as err:
-            print(f'WARNING: could not parse sample {sample_name}:\n{err}')
-            continue
+        # try:
+        # this should already be filtered, so we should get no parsing errors here
+        room_types, room_bboxes, room_door_adj, room_masks = convert_boxes_to_rooms(
+            boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=label_count)
+        # except ValueError as err:
+        #     print(f'WARNING: could not parse sample {sample_name}:\n{err}')
+        #     continue
 
         node_type = room_types[0].unsqueeze(dim=0)
         pt = room_bboxes[0].to(dtype=torch.float32)
@@ -757,8 +758,7 @@ def compute_egraph_set_stats(out_filename, input_dir, input_list, suffix, label_
     set_stats = egraph_set_stats(stats=set_stats, label_count=label_count)
 
     if out_filename is not None:
-        if not os.path.exists(os.path.dirname(out_filename)):
-            os.makedirs(os.path.dirname(out_filename))
+        os.makedirs(os.path.dirname(out_filename), exist_ok=True)
         save_stats(filename=out_filename, stats=set_stats)
 
     return set_stats
@@ -843,252 +843,94 @@ if __name__ == '__main__':
     from convert_boxes_to_rooms import room_type_names
 
     exclude_types = [1]
+    compute_stats = True
+    compute_stat_distances = True
 
-    # input_dir = '../data/results/5_tuples_t_0.8'
-    # stats_filename = '../data/results/5_tuples_t_0.8/stats.npy'
-    # input_list = None
-    # suffix = ''
+    if compute_stats:
 
-    # input_dir = '/home/guerrero/scratch_space/floorplan/rplan_ddg_var'
-    # stats_filename = '/home/guerrero/scratch_space/floorplan/stats.npy'
-    # input_list = '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt'
-    # suffix='_image_nodoor'
+        result_sets = [
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-    # input_dir = '../data/results/rplan_var_images_doors'
-    # stats_filename = '../data/results/rplan_var_images_doors/stats.npy'
-    # input_list = '../data/results/rplan_var_images_doors/all.txt'
-    # suffix=''
+            # {'box_dir': '../data/results/rplan_on_rplan', 'sample_list': '../data/results/rplan_on_rplan/all.txt', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+            
+            # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
+            # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
+        ]
 
-    # compute_egraph_set_stats(
-    #     out_filename=stats_filename, input_dir=input_dir, input_list=input_list, suffix=suffix, label_count=len(room_type_names), exclude_types=exclude_types)
+        for rsi, result_set in enumerate(result_sets):
 
+            box_dir = result_set['box_dir']
+            door_dir = result_set['door_dir'] if 'door_dir' in result_set else None
+            wall_dir = result_set['wall_dir'] if 'wall_dir' in result_set else None
+            sample_list = result_set['sample_list'] if 'sample_list' in result_set else None
+            suffix = result_set['suffix'] if 'suffix' in result_set else ''
+            out_filename = result_set['out_filename']
 
-    # GT
-    real_stat_filename = '/home/guerrero/scratch_space/floorplan/stats.npy'
+            print(f'result set [{rsi+1}/{len(result_sets)}]: {out_filename}')
+        
+            compute_egraph_set_stats(
+                out_filename=out_filename, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list=sample_list,
+                suffix=suffix, label_count=len(room_type_names), exclude_types=exclude_types)
 
-    # ours
-    fake_stat_filename = '../data/results/5_tuples_t_0.8/stats.npy'
-    out_dirname = '../data/results/5_tuples_t_0.8/stat_dists'
+    
+    if compute_stat_distances:
 
-    # # RPLAN baseline
-    # fake_stat_filename = '../data/results/rplan_var_images_doors/stats.npy'
-    # out_dirname = '../data/results/rplan_var_images_doors_stat_dists'
+        stat_dist_sets = [
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-    compute_egraph_set_stat_dists(
-        out_dirname=out_dirname,
-        real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename,
-        exclude_types=exclude_types, vis=True)
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-    # # # ---------------------------------------------------
-    # # # compare stats to gt
-    # # # ---------------------------------------------------
-    # # labels_filename = '../data/label_colors2.csv'
-    # # evals = [
-    # #     # # ours
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_suncg__suncg_001/1084720/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_suncg__suncg_001/1084720/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var/stats/stats_test.npy',
-    # #      'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_lifull_var__lifull_var_001/1085135/stats/stats_all.npy',
-    # #      'real_name': 'orig'},
-    # #     {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #      'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_lifull_var__lifull_var_001/1085135/stats/stats_all.npy',
-    # #      'real_name': 'parsed'},
-    # #     {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var/stats/stats_test.npy',
-    # #      'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_rplan_var__rplan_var_001/600727/stats/stats_all.npy',
-    # #      'real_name': 'orig'},
-    # #     {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #      'fake': '../data/results/stage_graph/egraph_edge_cgan_011b_rplan_var__rplan_var_001/600727/stats/stats_all.npy',
-    # #      'real_name': 'parsed'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+        ]
+        
+        for rsi, stat_dist_set in enumerate(stat_dist_sets):
+            real_stat_filename = stat_dist_set['real_stat_filename']
+            fake_stat_filename = stat_dist_set['fake_stat_filename']
+            out_dirname = os.path.join(os.path.dirname(fake_stat_filename), 'stat_dists')
 
-    # #     # # stylegan baseline
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/suncg_002_stylegan_baseline/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/suncg_002_stylegan_baseline/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/lifull_005/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/lifull_005/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/rplan_002_stylegan_baseline/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/stylegan/rplan_002_stylegan_baseline/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-
-    # #     # # pix2pixhd baseline
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/suncg_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/suncg_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/suncg_ddg_001_suncg_001/images/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/suncg_ddg_001_suncg_001/images/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/lifull_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/lifull_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/lifull_ddg_var_001_orig_lifull_var_001_epoch_20/images/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/lifull_ddg_var_001_orig_lifull_var_001_epoch_20/images/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/rplan_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/rplan_ddg_001/images/stats/stats_test.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/rplan_ddg_var_001_orig_rplan_var_001_epoch_20/images/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/pix2pixhd/rplan_ddg_var_001_orig_rplan_var_001_epoch_20/images/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-
-    # #     # # # rplan baseline
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/rplan/stage_ddg/lifull_parsedgraphs/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/rplan/stage_ddg/lifull_parsedgraphs/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/rplan/stage_ddg/rplan_parsedgraphs/stats/stats_all.npy',
-    # #     #  'real_name': 'orig'},
-    # #     # {'real': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/stats/stats_test.npy',
-    # #     #  'fake': '../data/results/rplan/stage_ddg/rplan_parsedgraphs/stats/stats_all.npy',
-    # #     #  'real_name': 'parsed'},
-    # #     ]
-
-
-    # # # for eval_info in evals:
-    # # #     eval_info['stats_dirname'] = os.path.normpath(
-    # # #         os.path.join(os.path.dirname(eval_info['fake']), '../stats_vs_'+eval_info['real_name']))
-    # # # for eval_info in evals:
-    # # #     print('------------------------')
-    # # #     print(f'evaluating\n{eval_info["real"]}\nvs.\n{eval_info["fake"]}')
-    # # #     print(f'and saving in\n{eval_info["stats_dirname"]}')
-    # # #     print('------------------------')
-    # # #     compute_egraph_set_stat_dists(
-    # # #         out_dirname=eval_info['stats_dirname'],
-    # # #         labels_filename=labels_filename,
-    # # #         real_stat_filename=eval_info['real'],
-    # # #         fake_stat_filename=eval_info['fake'])
-
-    # # for eval_info in evals:
-    # #     eval_info['stats_dirname'] = os.path.normpath(
-    # #         os.path.join(os.path.dirname(eval_info['fake']), '../stats_vs_'+eval_info['real_name']))
-    # # for eval_info in evals:
-    # #     print('------------------------')
-    # #     print(f'visualizing\n{eval_info["real"]}\nvs.\n{eval_info["fake"]}')
-    # #     print(f'and saving in\n{eval_info["stats_dirname"]}')
-    # #     print('------------------------')
-    # #     vis_egraph_set_stat_dists(
-    # #         real_stats=eval_info['real'], fake_stats=eval_info['fake'],
-    # #         stat_dists=os.path.join(eval_info['stats_dirname'], 'stat_dists.npy'),
-    # #         labels_filename=labels_filename,
-    # #         filename=os.path.join(eval_info['stats_dirname'], 'vis'))
-
-
-    # # ---------------------------------------------------
-    # # compute stats
-    # # ---------------------------------------------------
-    # # compute stats without comparing
-    # # unused, patio, window, door, wall
-    # import argparse
-    # from options import add_train_options
-    # egraph_suffix = '_graph.npy'
-
-    # # floorplans
-    # exclude_types = [0, 2, 3, 4, 5]
-    # labels_filename = '../data/label_colors2.csv'
-    # label_offset = -1
-    # label_count = 15
-    # node_dim = 4
-    # node_feature_scaling = 0.01
-    # evals = [
-    #     # # ground truth original and parsed graphs
-    #     # {'dataset': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013/test.txt'},
-    #     # {'dataset': '/home/code-base/scratch_space/interiorgen/data/suncg_ddg_013_parsedgraphs/test.txt'},
-    #     # {'dataset': '/scratch_space/ddg/lifull_ddg_var/test.txt'},
-    #     # {'dataset': '/home/code-base/scratch_space/interiorgen/data/lifull_ddg_var_parsedgraphs/test.txt'},
-    #     {'dataset': '/scratch_space/ddg/rplan_ddg_var/test.txt'},
-    #     # {'dataset': '/home/code-base/scratch_space/interiorgen/data/rplan_ddg_var_parsedgraphs/test.txt'},
-
-    #     # # generated graphs without doors
-    #     # {'dataset': '../data/results/stage_image/suncg_001/all.txt'},
-    #     # {'dataset': '../data/results/stage_image/rplan_001/all.txt'},
-    #     # {'dataset': '../data/results/stage_image/lifull_004/all.txt'},
-
-    #     # our graphs
-    #     # {'dataset': '../data/results/stage_graph/egraph_edge_cgan_011b_suncg__suncg_001/1084720/all.txt'},
-    #     # {'dataset': '../data/results/stage_graph/egraph_edge_cgan_011b_lifull__lifull_004/469455/all.txt',
-    #     #  'add_excludes': [10]}, # also exclude offices
-    #     # {'dataset': '../data/results/stage_graph/egraph_edge_cgan_011b_rplan__rplan_001/600727/all.txt'},
-
-    #     # # stylegan baseline
-    #     # {'dataset': '../data/results/stylegan/rplan_002_stylegan_baseline/all.txt'},
-    #     # {'dataset': '../data/results/stylegan/suncg_002_stylegan_baseline/all.txt'},
-    #     # {'dataset': '../data/results/stylegan/lifull_005/all.txt'},
-
-    #     # # pix2pixhd baseline
-    #     # {'dataset': '../data/results/pix2pixhd/suncg_ddg_001/images/test.txt'},
-    #     # {'dataset': '../data/results/pix2pixhd/suncg_ddg_001_suncg_001/images/all.txt'},
-    #     # {'dataset': '../data/results/pix2pixhd/lifull_ddg_001/images/test.txt'},
-    #     # {'dataset': '../data/results/pix2pixhd/lifull_ddg_var_001_orig_lifull_var_001/images/all.txt'},
-    #     # {'dataset': '../data/results/pix2pixhd/rplan_ddg_001/images/test.txt'},
-    #     # {'dataset': '../data/results/pix2pixhd/rplan_ddg_001_rplan_001/images/all.txt'},
-    # ]
-
-    # # # rooms
-    # # exclude_types = [0, 2, 3, 4, 5]
-    # # labels_filename = '../data/furn_colors_3.csv'
-    # # label_offset = 0
-    # # label_count = 27
-    # # node_dim = 4
-    # # node_feature_scaling = 0.083333 # 1/12 meters
-    # # evals = [
-    # #     {'dataset': '/home/code-base/scratch_space/interiorgen/data/furniture_016/test.txt'},
-    # # ]
-
-    # for eval_info in evals:
-    #     eval_info['stats_filename'] = os.path.join(
-    #         os.path.dirname(eval_info['dataset']), 'stats',
-    #         f'stats_{os.path.splitext(os.path.basename(eval_info["dataset"]))[0]}.npy')
-
-    # for eval_info in evals:
-    #     print('------------------------')
-    #     print(f'evaluating {eval_info["dataset"]}')
-    #     print('------------------------')
-
-    #     eval_exclude_types = exclude_types
-    #     if 'add_excludes' in eval_info:
-    #         eval_exclude_types.extend(eval_info['add_excludes'])
-
-    #     compute_egraph_set_stats(
-    #         out_filename=eval_info['stats_filename'],
-    #         egraph_dir=os.path.dirname(eval_info['dataset']),
-    #         egraph_list_filename=eval_info['dataset'],
-    #         egraph_suffix=egraph_suffix,
-    #         node_dim=node_dim,
-    #         node_mean=torch.zeros(1, 4), node_std=torch.ones(1, 4),
-    #         node_feature_scaling=node_feature_scaling,
-    #         label_count=label_count, label_offset=label_offset, labels_filename=labels_filename,
-    #         exclude_types=eval_exclude_types)
+            print(f'stat distance set [{rsi+1}/{len(stat_dist_sets)}]: {out_dirname}')
+        
+            compute_egraph_set_stat_dists(
+                out_dirname=out_dirname,
+                real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename,
+                exclude_types=exclude_types, vis=True)
