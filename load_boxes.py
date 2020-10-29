@@ -15,11 +15,15 @@ def get_sample_names(box_dir, door_dir=None, wall_dir=None, sample_list_path=Non
             # door edges: (.pkl)
             # wall edges: (.pkl)
 
-            for path, _, filenames in os.walk(box_dir):
-                for filename in filenames:
-                    if filename.endswith('.npz') or filename.endswith('.npy'):
-                        relpath = os.path.relpath(path, start=box_dir)
-                        names.append(os.path.join(relpath if relpath != '.' else '', filename[:-len('.npz')]))
+            # for path, dirnames, filenames in os.walk(box_dir):
+            #     for filename in filenames:
+            #         if filename.endswith('.npz') or filename.endswith('.npy'):
+            #             relpath = os.path.relpath(path, start=box_dir)
+            #             names.append(os.path.join(relpath if relpath != '.' else '', filename[:-len('.npz')]))
+
+            for filename in os.listdir(box_dir):
+                if os.path.isfile(os.path.join(box_dir, filename)) and (filename.endswith('.npz') or filename.endswith('.npy')):
+                    names.append(os.path.join(filename[:-len('.npz')]))
         else:
             # format 2:
             # all files are in the same folder, distinguished by suffix:
@@ -89,16 +93,6 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix=''):
             boxes.append(np.load(os.path.join(box_dir, f'{name}{suffix}_xyhw.npy')))
             if boxes[-1].size == 0:
                 boxes[-1] = np.zeros([0, 5], dtype=np.int64)
-
-            # door_edges_filenames = [f'{name}{suffix}_edgelist_v.pkl', f'{name}{suffix}_edgelist_h.pkl']
-            # door_edges.append(np.zeros([0, 2], dtype=np.int64))
-            # for door_edges_filename in door_edges_filenames:
-            #     with open(os.path.join(box_dir, door_edges_filename), 'rb') as f:
-            #         edges = np.array(pickle.load(f))
-            #         if edges.size > 0:
-            #             door_edges[-1] = np.concatenate([door_edges[-1], edges])
-            # if door_edges[-1].size == 0:
-            #     door_edges[-1] = np.zeros([0, 2], dtype=np.int64)
 
             door_edges_filename = f'{name}{suffix}_doorlist_all.pkl'
             with open(os.path.join(box_dir, door_edges_filename), 'rb') as f:
