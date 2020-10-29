@@ -34,7 +34,9 @@ def main():
     stats.hadj = []
     stats.vadj = []
 
-    IMG_PATH = f'/home/parawr/Projects/floorplan/rplan_var_images_doors/'
+    # IMG_PATH = f'/home/parawr/Projects/floorplan/rplan_var_images_doors/'
+    IMG_PATH = f'/home/parawr/Projects/floorplan/lifull_var_images_doors/'
+
     FILES = IMG_PATH + 'all.txt'
     DOOR_COLOR = (228, 26, 28)
     WALL_COLOR = (153, 153, 153)

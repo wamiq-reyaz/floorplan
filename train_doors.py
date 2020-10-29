@@ -22,7 +22,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'FloorPlan'
+PROJECT = 'LIFULLDoors'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -49,6 +49,8 @@ if __name__ == '__main__':
     # Data
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
+    parser.add_argument('--dataset', default='rplan', type=str, help='dataset to train on')
+    parser.add_argument('--lifull', default=False, type=bool, help='whether to train on lifull data')
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
@@ -56,31 +58,63 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if on_local():
-        args.root_dir = './'
-        args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
+    if args.lifull:
+        args.dataset = 'lifull'
 
-    else: # assume IBEX
-        args.root_dir = '/ibex/scratch/parawr/floorplan/'
-        args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
+    if args.dataset == 'rplan':
+        if on_local():
+            args.root_dir = './'
+            args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
 
-    dset = RrplanDoors(root_dir=args.datapath,
-                 split='train',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 dims=args.tuples,
-                 doors=args.doors)
+        else:  # assume IBEX
+            args.root_dir = '/ibex/scratch/parawr/floorplan/'
+            args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
+
+        dset = RrplanDoors(root_dir=args.datapath,
+                     split='train',
+                     seq_len=args.seq_len,
+                     edg_len=args.edg_len,
+                     vocab_size=args.vocab,
+                     dims=args.tuples,
+                     doors=args.doors)
+        val_set = RrplanDoors(root_dir=args.datapath,
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              dims=args.tuples,
+                              doors=args.doors)
+
+    elif args.dataset == 'lifull':
+        if on_local():
+            args.root_dir = './'
+            args.datapath = '/mnt/iscratch/datasets/lifull_dgg_var'
+
+        else:  # assume IBEX
+            args.root_dir = '/ibex/scratch/parawr/floorplan/'
+            args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
+
+        dset = RrplanDoors(root_dir=args.datapath,
+                           split='train',
+                           seq_len=args.seq_len,
+                           edg_len=args.edg_len,
+                           vocab_size=args.vocab,
+                           dims=args.tuples,
+                           doors=args.doors,
+                           lifull=True)
+
+        val_set = RrplanDoors(root_dir=args.datapath,
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              dims=args.tuples,
+                              doors=args.doors,
+                              lifull=True)
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
 
-    val_set = RrplanDoors(root_dir=args.datapath,
-                 split='val',
-                 seq_len=args.seq_len,
-                 edg_len=args.edg_len,
-                 vocab_size=args.vocab,
-                 dims=args.tuples,
-                 doors=args.doors)
+
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
 
@@ -145,7 +179,8 @@ if __name__ == '__main__':
         json.dump(argsdict, fd,
                   indent=4)
 
-    for epochs in range(40):
+    best_nll = np.inf
+    for epochs in range(args.epochs):
         model.train()
         for steps, data in tqdm(enumerate(dloader)):
             global_steps += 1
@@ -179,7 +214,7 @@ if __name__ == '__main__':
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_{epochs:0.3d}.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_3.pth')
 
         lr_scheduler.step()
         model.eval()
@@ -210,6 +245,9 @@ if __name__ == '__main__':
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
+        if total_nll < best_nll:
+            best_nll = total_nll
+            torch.save(model.state_dict(), SAVE_LOCATION + f'model_doors_best.pth')
 
     # writer.close()
 
