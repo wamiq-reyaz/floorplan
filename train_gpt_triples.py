@@ -1,4 +1,6 @@
 import os, sys
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import numpy as np
 import torch
 import torch.nn as nn

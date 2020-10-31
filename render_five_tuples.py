@@ -8,19 +8,23 @@ from utils import rplan_map
 def color_and_save(tuple_name):
     with open(tuple_name, 'rb') as fd:
         boxes = np.load(fd)
-        boxes = boxes['arr_0']
+        try:
+            boxes = boxes['arr_0']
+        except IndexError:
+            pass
 
-    base_img = np.zeros((64, 64, 3), dtype=np.uint8)
+    base_img = np.ones((64, 64, 3), dtype=np.uint8) * 255
 
     for box in boxes:
-        id = box[0]
+        id = int(box[0])
         if id >= rplan_map.shape[0]:
             print(id)
             continue
-        x = box[1]
-        y = box[2]
-        w = box[3]
-        h = box[4]
+        x = int(box[1])
+        y = int(box[2])
+        w = int(box[3])
+        h = int(box[4])
+        print(id)
 
         color = np.around(rplan_map[id]*255)
         # print(color)
@@ -28,7 +32,7 @@ def color_and_save(tuple_name):
 
     base_file_name = os.path.basename(tuple_name)
     root_file_name = os.path.splitext(base_file_name)[0]
-    save_file_name = os.path.join('samples', 'logged_0.8', 'rgb', root_file_name+'.png')
+    save_file_name = os.path.join('samples', 'triples_0.5', 'rgb', root_file_name+'.png')
 
     img = Image.fromarray(base_img)
     img.save(save_file_name)
@@ -36,7 +40,7 @@ def color_and_save(tuple_name):
 
 if __name__ == '__main__':
     from glob import glob
-    all_tuples = glob('./samples/logged_0.8/*.npz')
+    all_tuples = glob('/mnt/ibex/Projects/floorplan/samples/triples_0.5/nodes_0.5_0.5/*.npz')
     print(len(all_tuples))
 
     thread_pool = Pool(30)
