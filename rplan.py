@@ -116,6 +116,106 @@ class Rplan(Dataset):
     def __len__(self):
         return len(self.file_names)
 
+class RplanConditional(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False):
+        super().__init__()
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.enc_len = enc_len
+        self.dec_len = dec_len
+        self.vocab_size = vocab_size
+        self.drop_dim = drop_dim
+        self.wh = wh
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+
+        zero_token = np.array(0, dtype=np.uint8)
+        stop_token = np.array([self.vocab_size+1], dtype=np.uint8)
+
+        enc_seq = np.ones(self.enc_len, dtype=np.uint8) * self.vocab_size
+        dec_seq = np.ones(self.dec_len, dtype=np.uint8) * self.vocab_size
+
+
+        enc_attn = np.ones(self.enc_len)
+        dec_attn = np.ones(self.dec_len)
+
+        enc_pos_id = np.arange(self.enc_len, dtype=np.uint8)
+        dec_pos_id = np.arange(self.dec_len, dtype=np.uint8)
+
+        enc_temp = []
+        dec_temp = []
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            if self.drop_dim:
+                if self.wh:
+                    tokens = tokens[:, [0, 3, 4]]
+                else:
+                    tokens = tokens[:, :3]
+
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1: # idx has been added by one
+                    enc_temp.append(curr_node)
+                else:
+                    dec_temp.append(curr_node)
+
+        enc_tokens = np.hstack(
+                            (zero_token,
+                             np.asarray(enc_temp).ravel(),
+                             stop_token)
+        )
+        dec_tokens = np.hstack(
+                            (zero_token,
+                             np.asarray(dec_temp).ravel(),
+                             stop_token)
+        )
+
+        elength = len(enc_tokens)
+        dlength = len(dec_tokens)
+
+        enc_seq[:elength] = enc_tokens
+        dec_seq[:dlength] = dec_tokens
+
+        enc_attn[elength+1:] = 0.0
+        dec_attn[dlength+1:] = 0.0
+
+        return {'enc_seq': torch.tensor(enc_seq).long(),
+                'dec_seq': torch.tensor(dec_seq).long(),
+                'enc_attn': torch.tensor(enc_attn),
+                'dec_attn': torch.tensor(dec_attn),
+                'enc_pos_id': torch.tensor(enc_pos_id).long(),
+                'dec_pos_id': torch.tensor(dec_pos_id).long()}
+
+
+    def __len__(self):
+        return len(self.file_names)
+
 
 class LIFULL(Dataset):
     def __init__(self, root_dir, split=None,
@@ -705,12 +805,16 @@ if __name__ == '__main__':
     # aa = dset_graph[0]
     # print(aa)
     from tqdm import tqdm
-    dset_doors_v = RrplanDoors(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='vert')
+    # dset_doors_v = RrplanDoors(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='vert')
+    #
+    # # for ii in tqdm(range(len(dset_doors_v))):
+    # #     try:
+    # #         _ = dset_doors_v[ii]
+    # #     except:
+    # #         print(ii)
+    #
+    # print(dset_doors_v.file_names[46545])
 
-    # for ii in tqdm(range(len(dset_doors_v))):
-    #     try:
-    #         _ = dset_doors_v[ii]
-    #     except:
-    #         print(ii)
-
-    print(dset_doors_v.file_names[46545])
+    dset = RplanConditional(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
+    aa = dset[0]
+    print(aa)
