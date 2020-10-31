@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore', '', FutureWarning)
 import torch
 from torch import Tensor, device, dtype, nn
 from torch.nn import CrossEntropyLoss
@@ -161,6 +163,52 @@ class Block(nn.Module):
 
         outputs = [x] + output_attn[1:]
         return outputs  # x, present, (attentions)
+
+class CrossAttnBlock(nn.Module):
+    def __init__(self, n_ctx, config, scale=False):
+        super().__init__()
+        nx = config.n_embd
+        self.config = config
+
+        self.cross_attn = nn.TransformerDecoderLayer(d_model=nx,
+                                                     nhead=config.n_head,
+                                                     dim_feedforward=4*nx,
+                                                     activation='gelu'
+                                                     )
+
+    def forward(
+        self, enc, dec, self_attn_mask=None, cross_attn_mask=None
+    ):
+        """
+        :param enc: The encoder embeddings of shape (S, N, E) 
+        :param dec: The decoder embeddings of shape (T, N, E)
+        :param self_attn_mask: The decoder self attention mask of shape (N x T) for excluding padding
+        :param cross_attn_mask: The decoder cross attention mask of shape (N, S) for excluding padding in encoder
+        :return: output (output, 0): the attention+MLP output
+        """
+        output = self.cross_attn(tgt=dec, # S, N, E
+                                 memory=enc, # T, N, E
+                                 tgt_mask=self._get_decoder_mask().to(dec.device), # TxT
+                                 tgt_key_padding_mask=self._convert_mask_to_bool(self_attn_mask), # N x T
+                                 memory_key_padding_mask=self._convert_mask_to_bool(cross_attn_mask) # N x S
+                                 )
+
+        return (output, torch.tensor(0, device=output.device))
+
+
+    def _get_decoder_mask(self):
+        nt = self.config.dec_n
+        mask = torch.tril(torch.ones(nt, nt, dtype=torch.uint8))
+        return mask.logical_not()
+
+    def _convert_mask_to_bool(self, mask: torch.Tensor):
+        """
+        :param mask: A torch array of shape (N, X). This is an arbitrary attention mask, which should have 1s in
+                places we want to attend to, and 0's in places we don't. As PyTorch uses a different scheme, we invert.
+        :return:
+        """
+        mask_ = mask.type(torch.uint8)
+        return torch.logical_not(mask_)
 
 
 class GPT2Model(nn.Module):
@@ -547,12 +595,10 @@ class GPT2Encoder(nn.Module):
             else:
                 id_embeds = 0
                 inputs_embeds = self.wte(input_ids)
-            # print(input_ids.shape)
-            # print(inputs_embeds.shape)
-            # summed = torch.sum(inputs_embeds, dim=-2)
-            # print(summed.shape)
-            inputs_embeds = torch.sum(inputs_embeds, dim=-2) + id_embeds
-            # print(inputs_embeds.shape)
+
+            # print('/INside encoder printing dim of inputs_embeds', inputs_embeds.dim())
+            if inputs_embeds.dim() == 4: # ie the verts are 2d
+                inputs_embeds = torch.sum(inputs_embeds, dim=-2) + id_embeds
 
         if token_type_ids is not None:
             token_type_embeds = self.wte(token_type_ids)
@@ -568,12 +614,12 @@ class GPT2Encoder(nn.Module):
             inputs_embeds = inputs_embeds + pos_embeds
 
 
-        # print('Embedding shapes', inputs_embeds.shape)
         hidden_states = inputs_embeds
         hidden_states = self.drop(hidden_states)
 
+        # print('inside encoder printing hidden_states.shape', hidden_states.shape)
         output_shape = input_shape + (hidden_states.size(-1),)
-        # print(output_shape)
+        # print('inside encoder printing output shape', output_shape)
 
         presents = ()
         all_attentions = []
@@ -601,7 +647,7 @@ class GPT2Encoder(nn.Module):
         hidden_states = self.ln_f(hidden_states)
         hidden_states = self.lm_head(hidden_states)
 
-        hidden_states = hidden_states.view(*output_shape)
+        # hidden_states = hidden_states.view(*output_shape)
         # Add last hidden state
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
@@ -802,6 +848,159 @@ class GPT2Decoder(nn.Module):
         return (hidden_states, )
 
 
+class GPT2ConditionalDecoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.wte = nn.Embedding(config.vocab_size+2, config.n_embd)
+        self.wtte = nn.Embedding(config.n_types, config.n_embd)
+        self.wpe = nn.Embedding(config.n_positions, config.n_embd)
+        self.drop = nn.Dropout(config.embd_pdrop)
+        self.h = nn.ModuleList([CrossAttnBlock(config.n_ctx, config, scale=True) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size+2)
+
+        self.init_weights()
+
+    def init_weights(self):
+        """ Initialize and prunes weights if needed. """
+        # Initialize weights
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """ Initialize the weights.
+        """
+        if isinstance(module, (nn.Linear, nn.Embedding, Conv1D)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if isinstance(module, (nn.Linear, Conv1D)) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+    def get_input_embeddings(self):
+        return self.wte
+
+    def set_input_embeddings(self, new_embeddings):
+        self.wte = new_embeddings
+
+    def _prune_heads(self, heads_to_prune):
+        """ Prunes heads of the model.
+            heads_to_prune: dict of {layer_num: list of heads to prune in this layer}
+        """
+        for layer, heads in heads_to_prune.items():
+            self.h[layer].attn.prune_heads(heads)
+
+    def forward(
+        self,
+        input_ids=None, # the target sequence
+        past=None,
+        self_attention_mask=None,
+        cross_attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        enc_seq=None, # the encoder sequence
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        labels=None
+    ):
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        use_cache = use_cache if use_cache is not None else self.config.use_cache
+
+
+        input_shape = input_ids.size()
+        batch_size = input_ids.shape[0]
+
+        if past is None:
+            past_length = 0
+            past = [None] * len(self.h)
+        else:
+            past_length = past[0][0].size(-2)
+
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.view(-1, input_shape[-1])
+
+        if position_ids is None:
+            device = input_ids.device
+            position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=device)
+            # print(position_ids)
+            position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1])
+
+        if token_type_ids is None:
+            num_ids = input_ids.shape[-1]
+            type_ids = torch.arange(num_ids, dtype=torch.long, device=input_ids.device) % self.config.n_types
+            type_ids = type_ids.repeat((batch_size, 1))
+
+
+        # Get the input and position embeds
+        # NxT -> N x T x dim
+        inputs_embeds = self.wte(input_ids)
+        position_embeds = self.wpe(position_ids)
+        type_embeds = self.wtte(type_ids)
+
+        hidden_states = inputs_embeds + position_embeds + type_embeds
+        hidden_states = self.drop(hidden_states)
+
+        # print(enc_seq)
+        # (N , T) + (dim)
+        output_shape = input_shape + (hidden_states.size(-1),)
+
+        enc_seq_transposed = enc_seq.transpose(0, 1) # S, N, E
+        hidden_states = hidden_states.transpose(0, 1) # T, N, E
+        presents = ()
+        all_attentions = []
+        all_hidden_states = ()
+        for i, (block, layer_past) in enumerate(zip(self.h, past)):
+            if output_hidden_states:
+                all_hidden_states = all_hidden_states + (hidden_states.view(*output_shape),)
+
+            outputs = block(enc=enc_seq_transposed,
+                            dec=hidden_states,
+                            self_attn_mask=self_attention_mask,
+                            cross_attn_mask=cross_attention_mask)
+            # print(outputs[0])
+            # print(type(outputs))
+            # sys.exit()
+
+            hidden_states, present = outputs[:2]
+            if use_cache is True:
+                presents = presents + (present,)
+
+            if output_attentions:
+                all_attentions.append(outputs[2])
+
+        # untranspose
+        hidden_states = hidden_states.transpose(0, 1) # N, T, E
+        hidden_states = self.ln_f(hidden_states)
+
+        hidden_states = hidden_states.view(*output_shape)
+        # Add last hidden state
+        if output_hidden_states:
+            all_hidden_states = all_hidden_states + (hidden_states,)
+
+        outputs = (hidden_states,)
+        if use_cache is True:
+            outputs = outputs + (presents,)
+        if output_hidden_states:
+            outputs = outputs + (all_hidden_states,)
+        if output_attentions:
+            # let the number of heads free (-1) so we can extract attention even after head pruning
+            attention_output_shape = input_shape[:-1] + (-1,) + all_attentions[0].shape[-2:]
+            all_attentions = tuple(t.view(*attention_output_shape) for t in all_attentions)
+            outputs = outputs + (all_attentions,)
+
+        hidden_states = self.lm_head(hidden_states)
+
+        return (hidden_states, )
+
 class GraphGPTModel(nn.Module):
     def __init__(self, enc_config, dec_config):
         super().__init__()
@@ -859,27 +1058,140 @@ class GraphGPTModel(nn.Module):
         return loss, inner_prod
 
 
+class EncDecGPTModel(nn.Module):
+    def __init__(self, enc_config, dec_config):
+        super().__init__()
+        self.encoder = GPT2Encoder(enc_config)
+        self.decoder = GPT2ConditionalDecoder(dec_config)
+        self.embed_dim = enc_config.n_embd
+
+
+    def forward(self,
+                enc_seq,
+                dec_seq,
+                enc_attn_mask=None,
+                dec_attn_mask=None,
+                labels=None):
+
+        enc_embed = self.encoder(input_ids=enc_seq,
+                                 attention_mask=enc_attn_mask)[0]
+
+        # print(enc_embed)
+        logits = self.decoder(input_ids=dec_seq,
+                              self_attention_mask=dec_attn_mask,
+                              cross_attention_mask=enc_attn_mask,
+                              enc_seq=enc_embed)[0]
+
+        outputs = (logits,)
+        if labels is not None:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            outputs = outputs + (loss,) # tuple concat
+
+        return outputs
+
 
 if __name__ == '__main__':
+
     from transformers.configuration_gpt2 import  GPT2Config
 
+    config = GPT2Config(
+        vocab_size=65,
+        n_positions=200,
+        n_ctx=200,
+        n_embd=264,
+        n_layer=12,
+        n_head=12,
+        is_causal=False,
+        is_encoder=False,
+        n_types=5,
+        pos_id=True
+    )
 
-    enc = GPT2Config(is_causal=False)
-    dec = GPT2Config(is_causal=True)
+    dec_config = GPT2Config(
+        vocab_size=65,
+        n_positions=100,
+        n_ctx=100,
+        n_embd=264,
+        n_layer=12,
+        n_head=12,
+        is_causal=True,
+        is_encoder=False,
+        n_types=5,
+        dec_n=100
+    )
 
-    model = GraphGPTModel(enc, dec)
+    model = EncDecGPTModel(config, dec_config)
 
     bs = 3
-    node_ids = torch.arange(1024, dtype=torch.long)
+    node_ids = torch.arange(200, dtype=torch.long) % 63
     node_ids = node_ids.repeat((bs, 1))
 
-    edg_ids = torch.arange(512, dtype=torch.long)
-    edg_ids = edg_ids.repeat((bs, 1))
+    node_ids2 = torch.arange(100, dtype=torch.long) % 63
+    node_ids2 = node_ids2.repeat((bs, 1))
 
-    attention_mask = torch.ones(512, dtype=torch.float).reshape((1, -1))
-    attention_mask = attention_mask.repeat((bs, 1))
+    cross_attn_mask = torch.zeros((3, 200))
+    cross_attn_mask[:, :100] = 1
+    self_attn_mask = torch.zeros((3, 100))
+    self_attn_mask[:, :150] = 1
 
-    loss, logits = model(node_ids, edg_ids, edg_ids, attention_mask)
+    # print(node_ids.shape)
+    ret_tuple = model(enc_seq=node_ids,
+                   dec_seq=node_ids2,
+                   enc_attn_mask=cross_attn_mask,
+                   dec_attn_mask=self_attn_mask,
+                   labels=node_ids2)
+
+    # print(ret_tuple[0].shape, ret_tuple[1])
+    # print(ret_tuple[0])
+    # def forward(self,
+    #             enc_seq,
+    #             dec_seq,
+    #             enc_attn_mask=None,
+    #             dec_attn_mask=None,
+    #             labels=None):
+
+    # cond_dec_config = GPT2Config(is_causal=True,
+    #                              n_types=5,
+    #                              dec_n=1024
+    #                                 )
+    # bs = 3
+    # node_ids = torch.arange(1024, dtype=torch.long)
+    # node_ids = node_ids.repeat((bs, 1))
+    #
+    # cross_attn_mask = torch.ones((3, 1024))
+    # self_attn_mask = torch.zeros((3, 1024))
+    # embeddings = torch.rand(3, 1024, 768)
+    #
+    # model = GPT2ConditionalDecoder(cond_dec_config)
+    #
+    # logits = model(input_ids=node_ids,
+    #                self_attention_mask=self_attn_mask,
+    #                cross_attention_mask=cross_attn_mask,
+    #                enc_seq=embeddings)
+    #
+    # print(logits[0].shape)
+
+
+    # enc = GPT2Config(is_causal=False)
+    # dec = GPT2Config(is_causal=True)
+
+    # model = GraphGPTModel(enc, dec)
+    #
+    # bs = 3
+    # node_ids = torch.arange(1024, dtype=torch.long)
+    # node_ids = node_ids.repeat((bs, 1))
+    #
+    # edg_ids = torch.arange(512, dtype=torch.long)
+    # edg_ids = edg_ids.repeat((bs, 1))
+    #
+    # attention_mask = torch.ones(512, dtype=torch.float).reshape((1, -1))
+    # attention_mask = attention_mask.repeat((bs, 1))
+    #
+    # loss, logits = model(node_ids, edg_ids, edg_ids, attention_mask)
 
     # config = GPT2Config(is_causal=False)
     # # print(config)
