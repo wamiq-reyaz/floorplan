@@ -208,7 +208,8 @@ if __name__ == '__main__':
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
-        if best_nll >= total_nll:
+        if total_nll <= best_nll:
+            best_nll = total_nll
             torch.save(model.state_dict(), SAVE_LOCATION+ f'triples_hw3_best.pth')
 
     # writer.close()
