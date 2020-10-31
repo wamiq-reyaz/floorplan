@@ -188,7 +188,7 @@ class CrossAttnBlock(nn.Module):
         """
         output = self.cross_attn(tgt=dec, # S, N, E
                                  memory=enc, # T, N, E
-                                 tgt_mask=self._get_decoder_mask().to(dec.device), # TxT
+                                 tgt_mask=self._get_decoder_mask(dec.shape[0]).to(dec.device), # TxT
                                  tgt_key_padding_mask=self._convert_mask_to_bool(self_attn_mask), # N x T
                                  memory_key_padding_mask=self._convert_mask_to_bool(cross_attn_mask) # N x S
                                  )
@@ -196,8 +196,7 @@ class CrossAttnBlock(nn.Module):
         return (output, torch.tensor(0, device=output.device))
 
 
-    def _get_decoder_mask(self):
-        nt = self.config.dec_n
+    def _get_decoder_mask(self, nt):
         mask = torch.tril(torch.ones(nt, nt, dtype=torch.uint8))
         return mask.logical_not()
 
@@ -451,11 +450,17 @@ class GPT2Encoder(nn.Module):
         except:
             self.pos_id = False
 
+        try:
+            self.passthrough = self.config.passthrough
+        except:
+            self.passthrough = False
+
         if self.id_embed:
             self.ide = nn.Embedding(config.vocab_size+2, config.n_embd)
 
         if self.pos_id:
             self.pde = nn.Embedding(config.n_ctx, config.n_embd)
+            self.wtte = nn.Embedding(config.n_types, config.n_embd)
 
         self.init_weights()
 
@@ -555,6 +560,9 @@ class GPT2Encoder(nn.Module):
         else:
             past_length = past[0][0].size(-2)
 
+        # print(next(self.parameters()).device)
+
+
         # Attention mask.
         if attention_mask is not None:
             assert batch_size > 0, "batch_size has to be defined and > 0"
@@ -571,7 +579,7 @@ class GPT2Encoder(nn.Module):
             # positions we want to attend and -10000.0 for masked positions.
             # Since we are adding it to the raw scores before the softmax, this is
             # effectively the same as removing these entirely.
-            attention_mask = attention_mask.to(dtype=next(self.parameters()).dtype)  # fp16 compatibility
+            attention_mask = attention_mask.to(dtype=input_ids.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         # Prepare head mask if needed
@@ -589,6 +597,9 @@ class GPT2Encoder(nn.Module):
                 id_embeds = self.ide(input_ids[:, :, 0].contiguous())
                 # print(id_embeds)
                 inputs_embeds = self.wte(input_ids[:, :, 1:].contiguous())
+
+                # if input_ids.dim() == 3:
+                #     id_
                 # print(input_ids.shape)
                 # print(id_embeds.shape)
                 # print(inputs_embeds.shape)
@@ -606,16 +617,22 @@ class GPT2Encoder(nn.Module):
             token_type_embeds = 0
 
         if self.pos_id:
-            n_ctx = inputs_embeds.shape[1]
-            bs = inputs_embeds.shape[0]
-            pos_tokens = torch.arange(0, n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs, 1)
+            if position_ids is None:
+                n_ctx = inputs_embeds.shape[1]
+                bs = inputs_embeds.shape[0]
+                position_ids = torch.arange(0, n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs, 1)
+                type_ids = torch.arange(n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs, 1) % self.config.n_types
             # print(pos_tokens.shape)
-            pos_embeds = self.pde(pos_tokens)
-            inputs_embeds = inputs_embeds + pos_embeds
+            pos_embeds = self.pde(position_ids)
+            type_embeds = self.wtte(type_ids)
+            inputs_embeds = inputs_embeds + pos_embeds + type_embeds
 
 
         hidden_states = inputs_embeds
         hidden_states = self.drop(hidden_states)
+
+        if self.passthrough:
+            return hidden_states
 
         # print('inside encoder printing hidden_states.shape', hidden_states.shape)
         output_shape = input_shape + (hidden_states.size(-1),)

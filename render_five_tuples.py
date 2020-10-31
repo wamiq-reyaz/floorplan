@@ -32,17 +32,62 @@ def color_and_save(tuple_name):
 
     base_file_name = os.path.basename(tuple_name)
     root_file_name = os.path.splitext(base_file_name)[0]
-    save_file_name = os.path.join('samples', 'triples_0.5', 'rgb', root_file_name+'.png')
+    save_file_name = os.path.join(root_file_name+'.png')
 
     img = Image.fromarray(base_img)
     img.save(save_file_name)
 
+def color_and_save_exterior(tuple_name):
+    with open(tuple_name, 'rb') as fd:
+        boxes = np.load(fd)
+        try:
+            boxes = boxes['arr_0']
+        except IndexError:
+            pass
+
+    boxes = boxes[1:] - 1
+    stop_idx = np.argmax(boxes)
+    try:
+        boxes = boxes[:stop_idx]
+        boxes = boxes.reshape((-1, 5))
+    except:
+        return
+    print(boxes.shape)
+
+    base_img = np.ones((64, 64, 3), dtype=np.uint8) * 255
+
+    for box in boxes:
+        print(box)
+        id = int(box[0])
+        if id >= rplan_map.shape[0]:
+            print(id)
+            continue
+        x = int(box[1])
+        y = int(box[2])
+        w = int(box[3])
+        h = int(box[4])
+        print(id)
+
+        color = np.around(rplan_map[id]*255)
+        # print(color)
+        base_img[y:y+h, x:x+w] = color
+
+    base_file_name = os.path.basename(tuple_name)
+    root_file_name = os.path.splitext(base_file_name)[0]
+    save_file_name = os.path.join(root_file_name+'.png')
+
+    img = Image.fromarray(base_img)
+    img.save(save_file_name)
 
 if __name__ == '__main__':
     from glob import glob
-    all_tuples = glob('/mnt/ibex/Projects/floorplan/samples/triples_0.5/nodes_0.5_0.5/*.npz')
+    # all_tuples = glob('/mnt/ibex/Projects/floorplan/samples/triples_0.5/nodes_0.5_0.5/*.npz')
+    all_tuples = glob('./demo*.npz')
+    all_ext = glob('./exterior*.npz')
+
     print(len(all_tuples))
 
-    thread_pool = Pool(30)
+    thread_pool = Pool(1)
 
     thread_pool.map(color_and_save, all_tuples)
+    thread_pool.map(color_and_save_exterior, all_ext)
