@@ -59,7 +59,8 @@ class Rplan(Dataset):
                  seq_len=200,
                  vocab_size=65,
                  drop_dim=False,
-                 transforms=None):
+                 transforms=None,
+                 wh=False):
         super().__init__()
         self.root_dir = root_dir
         with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
@@ -70,6 +71,7 @@ class Rplan(Dataset):
         self.seq_len = seq_len
         self.vocab_size = vocab_size
         self.drop_dim = drop_dim
+        self.wh = wh
 
         if transforms:
             self.transforms = transforms
@@ -94,7 +96,10 @@ class Rplan(Dataset):
         with open(path, 'rb') as f:
             tokens = np.load(path)
             if self.drop_dim:
-                tokens = tokens[:, :3]
+                if self.wh:
+                    tokens = tokens[:, [0, 3, 4]]
+                else:
+                    tokens = tokens[:, :3]
             tokens = tokens.ravel() + 1 # shift original by 1
             tokens = self.transforms(tokens)
             tokens = np.hstack((zero_token, tokens, stop_token))
@@ -178,7 +183,8 @@ class RrplanGraph(Dataset):
                  vocab_size=65,
                  edg_len=100,
                  edg_type='v',
-                 transforms=None):
+                 transforms=None,
+                 wh=False):
         super().__init__()
         self.root_dir = root_dir
         with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
@@ -190,6 +196,7 @@ class RrplanGraph(Dataset):
         self.vocab_size = vocab_size
         self.edg_len = edg_len
         self.edg_type = edg_type
+        self.wh = wh
 
         if transforms:
             self.transforms = transforms
@@ -219,7 +226,10 @@ class RrplanGraph(Dataset):
         # create the vertex_data first
         with open(path, 'rb') as f:
             tokens = np.load(path) + 1 # shift original by 1
-            tokens = tokens[:, :3] # drop h and w
+            if self.wh:
+                tokens = tokens[:, [0, 3, 4]]
+            else:
+                tokens = tokens[:, :3] # drop h and w
             tokens = self.transforms(tokens)
             length = len(tokens)
 

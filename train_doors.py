@@ -30,13 +30,13 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
     parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
-    parser.add_argument('--edg_len', default=48, type=int, help='how long is the edge length or door length')
+    parser.add_argument('--edg_len', default=90, type=int, help='how long is the edge length or door length')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
     parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
     parser.add_argument('--doors', default='all', type=str, help='h/v/all doors')
     parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=90, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
 
 
