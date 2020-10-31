@@ -34,8 +34,23 @@ def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_cou
     room_types, room_bboxes, room_door_adj, room_masks = [], [], [], []
     for fp_boxes, fp_door_edges, fp_wall_edges in zip(boxes, door_edges, wall_edges):
 
+        if fp_boxes.ndim != 2 or fp_boxes.shape[1] != 5:
+            raise ValueError('Invalid boxes, boxes array has incorrect shape.')
+
+        if fp_door_edges.ndim != 2 or fp_door_edges.shape[1] != 2 or fp_wall_edges.ndim != 2 or fp_wall_edges.shape[1] != 2:
+            raise ValueError('Invalid edges, edges array has incorrect shape.')
+
+        if fp_boxes.size == 0:
+            raise ValueError('Empty boxes.')
+
         if (fp_door_edges.size > 0  and fp_door_edges.max() >= fp_boxes.shape[0]) or (fp_wall_edges.size > 0 and fp_wall_edges.max() >= fp_boxes.shape[0]):
             raise ValueError('Invalid edges, the index is out of bounds.')
+
+        if fp_boxes.dtype == np.float32:
+            # boxes are probably 3-tuples which are stored in float format, with the x,y,w,h coordinates from [0...1] instead of [0..img_res-1]
+            fp_boxes[:, [1, 3]] *= img_res[1]-1
+            fp_boxes[:, [2, 4]] *= img_res[0]-1
+            fp_boxes = fp_boxes.round().astype(np.int64)
 
         if fp_boxes.size > 0 and (fp_boxes[:, 0].max() >= room_type_count or fp_boxes[:, 1].max() >= img_res[1] or fp_boxes[:, 2].max() >= img_res[0] or (fp_boxes[:, 1]+fp_boxes[:, 3]).max() > img_res[1] or (fp_boxes[:, 2]+fp_boxes[:, 4]).max() > img_res[0]):
             raise ValueError('Invalid boxes, the type index or box shapes are out of bounds.')

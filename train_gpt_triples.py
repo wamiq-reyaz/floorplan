@@ -24,7 +24,7 @@ import uuid, shutil
 from glob import glob
 from datetime import datetime as dt
 
-PROJECT = 'Triplesxy'
+PROJECT = 'Triples_hw'
 
 
 if __name__ == '__main__':
@@ -51,6 +51,7 @@ if __name__ == '__main__':
     # Data
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
+    parser.add_argument('--wh', default=False, type=bool, help='Enable id,w,h as triples dataset')
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
@@ -68,6 +69,8 @@ if __name__ == '__main__':
         args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
+    from random import choice
+    # args.lr = choice([0.001, 0.0005, 0.0007])
 
     # dset = Rplan(root_dir=args.datapath,
     #              split='train',
@@ -79,7 +82,8 @@ if __name__ == '__main__':
                  split='train',
                  seq_len=120,
                  vocab_size=65,
-                 drop_dim=True)
+                 drop_dim=True,
+                 wh=args.wh)
 
     dloader = DataLoader(dset, batch_size=64, num_workers=10, shuffle=True)
 
@@ -93,7 +97,8 @@ if __name__ == '__main__':
                  split='val',
                  seq_len=120,
                  vocab_size=65,
-                drop_dim=True)
+                drop_dim=True,
+                    wh=args.wh)
 
     val_loader = DataLoader(val_set, batch_size=64, num_workers=10)
 
@@ -125,7 +130,12 @@ if __name__ == '__main__':
     global_steps = 1
     val_steps = 1
 
-    SAVE_LOCATION = args.root_dir + f'models/lifull_triples_xy/' + run_id + '/'
+    if args.wh:
+        save_suffix = 'wh'
+    else:
+        save_suffix = 'xy'
+    SAVE_LOCATION = args.root_dir + f'models/triples_{save_suffix}/' + run_id + '/'
+
     if not os.path.exists(SAVE_LOCATION):
         os.makedirs(SAVE_LOCATION, exist_ok=True)
 

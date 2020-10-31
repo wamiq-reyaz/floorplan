@@ -77,13 +77,15 @@ if __name__ == '__main__':
                     seq_len=args.seq_len,
                     edg_len=args.edg_len,
                     vocab_size=args.vocab,
-                    edg_type=args.adj)
+                    edg_type=args.adj,
+                           wh=True)
         val_set = RrplanGraph(root_dir=args.datapath,
                     split='val',
                     seq_len=args.seq_len,
                     edg_len=args.edg_len,
                     vocab_size=args.vocab,
-                    edg_type=args.adj)
+                    edg_type=args.adj,
+                              wh=True)
     
     else:
         dset = LIFULLGraph(root_dir=args.datapath,
@@ -188,20 +190,10 @@ if __name__ == '__main__':
                           labels=edg_seq,
                           vert_attn_mask=vert_attn_mask)
 
-            # print(len(loss))
-            # for v in loss:
-            #     if isinstance(v, torch.Tensor):
-            #         print(v.shape)
-            #     else:
-            #         for vv in v:
-            #             print('\t', vv.shape)
-            # print(loss[1])
             loss[0].mean().backward()
 
             optimizer.step()
 
-            # if steps % 100 == 0:
-            # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
         torch.save(model.state_dict(), SAVE_LOCATION + f'model_adj_{args.adj}.pth')
@@ -227,17 +219,12 @@ if __name__ == '__main__':
                 all_val_stats.append(loss[0].mean().item())
 
 
-                # writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
-
-                # global_steps += 1
-                # val_steps += val_step_size
             total_nll = np.mean(np.asarray(all_val_stats))
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
         if best_nll <= total_nll:
             torch.save(model.state_dict(), SAVE_LOCATION+  f'model_adj_{args.adj}_best.pth')
-    # writer.close()
 
 
 
