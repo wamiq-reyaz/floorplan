@@ -179,6 +179,7 @@ if __name__ == '__main__':
         json.dump(argsdict, fd,
                   indent=4)
 
+    best_nll = np.inf
     for epochs in range(args.epochs):
         model.train()
         for steps, data in tqdm(enumerate(dloader)):
@@ -213,7 +214,7 @@ if __name__ == '__main__':
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls_{epochs:03d}.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls.pth')
 
         lr_scheduler.step()
         model.eval()
@@ -244,6 +245,9 @@ if __name__ == '__main__':
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
+        if total_nll <= best_nll:
+            best_nll = total_nll
+            torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls_best.pth')
 
     # writer.close()
 

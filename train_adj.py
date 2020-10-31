@@ -58,6 +58,7 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str, help="Wandb tags")
 
     args = parser.parse_args()
+    args.adj = 'h'
 
     if on_local():
         args.root_dir = './'
@@ -223,7 +224,8 @@ if __name__ == '__main__':
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
-        if best_nll <= total_nll:
+        if total_nll <= best_nll:
+            best_nll = total_nll
             torch.save(model.state_dict(), SAVE_LOCATION+  f'model_adj_{args.adj}_best.pth')
 
 
