@@ -6,8 +6,8 @@ from matplotlib.patches import  Polygon
 from matplotlib.collections import  PatchCollection
 import numpy as np
 import networkx as nx
-# import gurobipy as gp
-# from gurobipy import GRB
+import gurobipy as gp
+from gurobipy import GRB
 from scipy import ndimage
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
