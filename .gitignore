@@ -14,4 +14,4 @@ models/
 .idea/
 .models/
 doors/
-
+.ipynb_checkpoints
