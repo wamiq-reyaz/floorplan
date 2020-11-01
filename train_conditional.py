@@ -39,8 +39,9 @@ if __name__ == '__main__':
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
     parser.add_argument('--pos_id', default=True, type=bool, help='Whether to use pos_id in encoder')
     parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
-    parser.add_argument('--passthrough', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--passthrough', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
     parser.add_argument('--wh', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
 
     # optimizer
@@ -121,6 +122,13 @@ if __name__ == '__main__':
 
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
+    args.passthrough=False
+
+    if args.flipped:
+        enc_is_causal=True
+        dec_is_causal=False
+        PROJECT = 'conditional_flipped'
+
 
     enc = GPT2Config(
         vocab_size=args.vocab,
@@ -129,7 +137,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,
-        is_causal=False,
+        is_causal=enc_is_causal,
         is_encoder=True,
         passthrough=args.passthrough,
         id_embed=args.id_embed,
@@ -144,7 +152,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.dec_layer,
         n_head=12,
-        is_causal=True,
+        is_causal=dec_is_causal,
         is_encoder=False,
         n_types=args.tuples
     )
@@ -199,12 +207,18 @@ if __name__ == '__main__':
             enc_attn = data['enc_attn'].cuda()
             dec_attn = data['dec_attn'].cuda()
 
-
-            loss = model( enc_seq=enc_seq,
-                   dec_seq=dec_seq,
-                   enc_attn_mask=enc_attn,
-                   dec_attn_mask=dec_attn,
-                   labels=dec_seq)
+            if args.flipped:
+                loss = model(enc_seq=dec_seq,
+                            dec_seq=enc_seq,
+                            enc_attn_mask=dec_attn,
+                            dec_attn_mask=enc_attn,
+                            labels=dec_seq)
+            else:
+                loss = model( enc_seq=enc_seq,
+                    dec_seq=dec_seq,
+                    enc_attn_mask=enc_attn,
+                    dec_attn_mask=dec_attn,
+                    labels=dec_seq)
 
             loss[1].mean().backward()
 
@@ -228,11 +242,18 @@ if __name__ == '__main__':
                 enc_attn = data['enc_attn'].cuda()
                 dec_attn = data['dec_attn'].cuda()
 
-                loss = model(enc_seq=enc_seq,
-                             dec_seq=dec_seq,
-                             enc_attn_mask=enc_attn,
-                             dec_attn_mask=dec_attn,
-                             labels=dec_seq)
+                if args.flipped:
+                    loss = model(enc_seq=dec_seq,
+                                dec_seq=enc_seq,
+                                enc_attn_mask=dec_attn,
+                                dec_attn_mask=enc_attn,
+                                labels=dec_seq)
+                else:
+                    loss = model( enc_seq=enc_seq,
+                        dec_seq=dec_seq,
+                        enc_attn_mask=enc_attn,
+                        dec_attn_mask=dec_attn,
+                        labels=dec_seq)
 
                 all_val_stats.append(loss[1].mean().item())
 

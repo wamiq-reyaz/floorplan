@@ -186,8 +186,8 @@ class CrossAttnBlock(nn.Module):
         :param cross_attn_mask: The decoder cross attention mask of shape (N, S) for excluding padding in encoder
         :return: output (output, 0): the attention+MLP output
         """
-        output = self.cross_attn(tgt=dec, # S, N, E
-                                 memory=enc, # T, N, E
+        output = self.cross_attn(tgt=dec, # T, N, E
+                                 memory=enc, # S, N, E
                                  tgt_mask=self._get_decoder_mask(dec.shape[0]).to(dec.device), # TxT
                                  tgt_key_padding_mask=self._convert_mask_to_bool(self_attn_mask), # N x T
                                  memory_key_padding_mask=self._convert_mask_to_bool(cross_attn_mask) # N x S
@@ -197,7 +197,11 @@ class CrossAttnBlock(nn.Module):
 
 
     def _get_decoder_mask(self, nt):
-        mask = torch.tril(torch.ones(nt, nt, dtype=torch.uint8))
+        # nt = self.config.n_ctx
+        if self.config.is_causal:
+            mask = torch.tril(torch.ones(nt, nt, dtype=torch.uint8))
+        else:
+            mask = torch.ones(nt, nt, dtype=torch.uint8)
         return mask.logical_not()
 
     def _convert_mask_to_bool(self, mask: torch.Tensor):
@@ -626,6 +630,8 @@ class GPT2Encoder(nn.Module):
             pos_embeds = self.pde(position_ids)
             type_embeds = self.wtte(type_ids)
             inputs_embeds = inputs_embeds + pos_embeds + type_embeds
+            print(inputs_embeds.shape)
+            print('hello')
 
 
         hidden_states = inputs_embeds
