@@ -6,8 +6,8 @@ from matplotlib.patches import  Polygon
 from matplotlib.collections import  PatchCollection
 import numpy as np
 import networkx as nx
-# import gurobipy as gp
-# from gurobipy import GRB
+import gurobipy as gp
+from gurobipy import GRB
 from scipy import ndimage
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
@@ -291,12 +291,12 @@ class LPSolver(object):
         self._floor = floor
         self._n_vars = self._floor.get_nrooms()
         self._model = gp.Model('solver')
-        self.xlocs = self._model.addMVar(shape=self._n_vars,  vtype=GRB.CONTINUOUS, name='xlocs')
-        self.ylocs = self._model.addMVar(shape=self._n_vars, vtype=GRB.CONTINUOUS, name='ylocs')
-        self.widths = self._model.addMVar(shape=self._n_vars, vtype=GRB.CONTINUOUS, name='widths')
-        self.heights = self._model.addMVar(shape=self._n_vars, vtype=GRB.CONTINUOUS, name='heights')
-        self.bbox_width = self._model.addMVar(shape=1, lb=0.0, vtype=GRB.CONTINUOUS, name='bbox_width')
-        self.bbox_height = self._model.addMVar(shape=1, lb=0.0, vtype=GRB.CONTINUOUS, name='bbox_height')
+        self.xlocs = self._model.addMVar(shape=self._n_vars,  vtype=GRB.INTEGER, name='xlocs')
+        self.ylocs = self._model.addMVar(shape=self._n_vars, vtype=GRB.INTEGER, name='ylocs')
+        self.widths = self._model.addMVar(shape=self._n_vars, lb=1, vtype=GRB.INTEGER, name='widths')
+        self.heights = self._model.addMVar(shape=self._n_vars, lb = 1, vtype=GRB.INTEGER, name='heights')
+        self.bbox_width = self._model.addMVar(shape=1, lb=0, vtype=GRB.INTEGER, name='bbox_width')
+        self.bbox_height = self._model.addMVar(shape=1, lb=0, vtype=GRB.INTEGER, name='bbox_height')
         self.summer = np.ones((self._n_vars))
         self._min_sep = 0
         self.lines_align = False
@@ -374,19 +374,19 @@ class LPSolver(object):
                     self._model.addConstr(self.xlocs[node] + self.widths[node] == self.bbox_width[0],
                                           name=f'h_maximal_{node}')
                 else:
-                    self._model.addConstr(self.xlocs[node] + self.widths[node] == 1 , name=f'h_maximal_{node}')
+                    self._model.addConstr(self.xlocs[node] + self.widths[node] == 64 , name=f'h_maximal_{node}')
             else:
-                self._model.addConstr(self.xlocs[node] + self.widths[node] - self.bbox_width[0] + self._min_sep <= 0.0, name=f'h_maximal_{node}')
+                self._model.addConstr(self.xlocs[node] + self.widths[node] - self.bbox_width[0] + self._min_sep <= 0, name=f'h_maximal_{node}')
 
         for node in self._get_all_maximal(self._floor.vert_constraints):
             if self.lines_align:
                 if self.boxes_are_maximal:
-                    self._model.addConstr(self.ylocs[node] + self.heights[node] == 1 , name=f'v_maximal_{node}')
+                    self._model.addConstr(self.ylocs[node] + self.heights[node] == 64 , name=f'v_maximal_{node}')
                 else:
                     self._model.addConstr(self.ylocs[node] + self.heights[node] == self.bbox_height[0],
                                           name=f'v_maximal_{node}')
             else:
-                self._model.addConstr(self.ylocs[node] + self.heights[node] - self.bbox_height[0] + self._min_sep <= 0.0, name=f'v_maximal_{node}')
+                self._model.addConstr(self.ylocs[node] + self.heights[node] - self.bbox_height[0] + self._min_sep <= 0, name=f'v_maximal_{node}')
 
         # constraints for all
 

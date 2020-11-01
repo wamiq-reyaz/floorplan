@@ -1,20 +1,20 @@
 import os, sys
-import numpy as np
-import torch
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
+import numpy as np
+import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RrplanWalls
-from gpt2 import GraphGPTModel
+from rplan import RrplanGraph, Flip, Rot90,RplanConditional
+from gpt2 import EncDecGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
 from glob import glob
@@ -24,22 +24,24 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'FixedWalls'
+PROJECT = 'demo_conditional'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
     # Model
     parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
-    parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
-    parser.add_argument('--edg_len', default=220, type=int, help='how long is the edge length or door length')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
     parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
-    parser.add_argument('--doors', default='all', type=str, help='h/v/all doors')
     parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=220, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=120, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
+    parser.add_argument('--pos_id', default=True, type=bool, help='Whether to use pos_id in encoder')
+    parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
+    parser.add_argument('--passthrough', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--wh', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
 
     # optimizer
@@ -59,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str, help="Wandb tags")
 
     args = parser.parse_args()
+
     if args.lifull:
         args.dataset = 'lifull'
 
@@ -67,56 +70,65 @@ if __name__ == '__main__':
             args.root_dir = './'
             args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
 
-        else: # assume IBEX
+        else:  # assume IBEX
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
             args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
-        dset = RrplanWalls(root_dir=args.datapath,
+        dset = RplanConditional(root_dir=args.datapath,
                      split='train',
-                     seq_len=args.seq_len,
-                     edg_len=args.edg_len,
+                     enc_len=args.enc_n,
+                     dec_len=args.dec_n,
+                     drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
-                     dims=args.tuples,
-                     doors=args.doors)
-
-        val_set = RrplanWalls(root_dir=args.datapath,
+                     wh=args.wh)
+        val_set = RplanConditional(root_dir=args.datapath,
                               split='val',
-                              seq_len=args.seq_len,
-                              edg_len=args.edg_len,
+                              enc_len=args.enc_n,
+                              dec_len=args.dec_n,
                               vocab_size=args.vocab,
-                              dims=args.tuples,
-                              doors=args.doors)
+                              drop_dim=args.tuples == 3,
+                              wh=args.wh)
 
     elif args.dataset == 'lifull':
-        if on_local():
-            args.root_dir = './'
-            args.datapath = '/mnt/iscratch/datasets/lifull_dgg_var'
-
-        else:  # assume IBEX
-            args.root_dir = '/ibex/scratch/parawr/floorplan/'
-            args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
-
-        dset = RrplanWalls(root_dir=args.datapath,
-                           split='train',
-                           seq_len=args.seq_len,
-                           edg_len=args.edg_len,
-                           vocab_size=args.vocab,
-                           dims=args.tuples,
-                           doors=args.doors,
-                           lifull=True)
-
-        val_set = RrplanWalls(root_dir=args.datapath,
-                              split='val',
-                              seq_len=args.seq_len,
-                              edg_len=args.edg_len,
-                              vocab_size=args.vocab,
-                              dims=args.tuples,
-                              doors=args.doors,
-                              lifull=True)
+        pass
+        # if on_local():
+        #     args.root_dir = './'
+        #     args.datapath = '/mnt/iscratch/datasets/lifull_dgg_var'
+        #
+        # else:  # assume IBEX
+        #     args.root_dir = '/ibex/scratch/parawr/floorplan/'
+        #     args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
+        #
+        # dset = RrplanDoors(root_dir=args.datapath,
+        #                    split='train',
+        #                    seq_len=args.seq_len,
+        #                    edg_len=args.edg_len,
+        #                    vocab_size=args.vocab,
+        #                    dims=args.tuples,
+        #                    doors=args.doors,
+        #                    lifull=True)
+        #
+        # val_set = RrplanDoors(root_dir=args.datapath,
+        #                       split='val',
+        #                       seq_len=args.seq_len,
+        #                       edg_len=args.edg_len,
+        #                       vocab_size=args.vocab,
+        #                       dims=args.tuples,
+        #                       doors=args.doors,
+        #                       lifull=True)
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
 
+
+
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
+    args.passthrough=False
+
+    if args.flipped:
+        enc_is_causal=True
+        dec_is_causal=False
+        PROJECT = 'conditional_flipped'
+
 
     enc = GPT2Config(
         vocab_size=args.vocab,
@@ -125,8 +137,12 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,
-        is_causal=False,
-        is_encoder=True
+        is_causal=enc_is_causal,
+        is_encoder=True,
+        passthrough=args.passthrough,
+        id_embed=args.id_embed,
+        pos_id=args.pos_id,
+        n_types=args.tuples
     )
 
     dec = GPT2Config(
@@ -136,23 +152,23 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.dec_layer,
         n_head=12,
-        is_causal=True,
-        is_encoder=False
+        is_causal=dec_is_causal,
+        is_encoder=False,
+        n_types=args.tuples
     )
 
     # print()
     # sys.exit()
-    model = GraphGPTModel(enc, dec)
+    model = EncDecGPTModel(enc, dec).cuda()
 
     model = DataParallel(model.cuda())
 
     optimizer = Adam(model.parameters(), lr=args.lr, eps=1e-6)
     lr_scheduler = StepLR(optimizer, step_size=args.step, gamma=args.gamma)
 
-    # writer = SummaryWriter(comment='intial_door_model_5_tuple')\
 
 
-    run_id = "GraphGPT-{}----tuples{}-bs{}-lr{:0.5f}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'), args.tuples,
+    run_id = "GraphGPT-{}-bs{}-lr{}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'),
                                                                       args.bs, args.lr, args.enc_layer, args.dec_layer,
                                                                       args.dim, uuid.uuid4())
     wandb.init(project=PROJECT, name=run_id, config=args, dir=".", save_code=True, notes=args.notes)
@@ -161,7 +177,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/{args.dataset}_{args.tuples}_fixed_walls/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/cond/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
@@ -185,36 +201,34 @@ if __name__ == '__main__':
         for steps, data in tqdm(enumerate(dloader)):
             global_steps += 1
             optimizer.zero_grad()
-            vert_seq = data['vert_seq'].cuda()
-            edg_seq = data['edg_seq'].cuda()
-            attn_mask = data['attn_mask'].cuda()
-            pos_id = data['pos_id'].cuda()
-            vert_attn_mask = data['vert_attn_mask'].cuda()
-            # print(vert_seq.shape)
+            enc_seq = data['enc_seq'].cuda()
+            dec_seq = data['dec_seq'].cuda()
 
-            loss = model( node=vert_seq,
-                          edg=edg_seq,
-                          attention_mask=attn_mask,
-                          labels=edg_seq,
-                          vert_attn_mask=vert_attn_mask)
+            enc_attn = data['enc_attn'].cuda()
+            dec_attn = data['dec_attn'].cuda()
 
-            # print(len(loss))
-            # for v in loss:
-            #     if isinstance(v, torch.Tensor):
-            #         print(v.shape)
-            #     else:
-            #         for vv in v:
-            #             print('\t', vv.shape)
-            # print(loss[1])
-            loss[0].mean().backward()
+            if args.flipped:
+                loss = model(enc_seq=dec_seq,
+                            dec_seq=enc_seq,
+                            enc_attn_mask=dec_attn,
+                            dec_attn_mask=enc_attn,
+                            labels=dec_seq)
+            else:
+                loss = model( enc_seq=enc_seq,
+                    dec_seq=dec_seq,
+                    enc_attn_mask=enc_attn,
+                    dec_attn_mask=dec_attn,
+                    labels=dec_seq)
+
+            loss[1].mean().backward()
 
             optimizer.step()
 
             # if steps % 100 == 0:
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
-            wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
+            wandb.log({'loss/train': loss[1].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_cond_3.pth')
 
         lr_scheduler.step()
         model.eval()
@@ -222,34 +236,36 @@ if __name__ == '__main__':
         all_val_stats = []
         with torch.no_grad():
             for steps, data in tqdm(enumerate(val_loader)):
-                vert_seq = data['vert_seq'].cuda()
-                edg_seq = data['edg_seq'].cuda()
-                attn_mask = data['attn_mask'].cuda()
-                pos_id = data['pos_id'].cuda()
-                vert_attn_mask = data['vert_attn_mask'].cuda()
+                enc_seq = data['enc_seq'].cuda()
+                dec_seq = data['dec_seq'].cuda()
 
-                loss = model( node=vert_seq,
-                          edg=edg_seq,
-                          attention_mask=attn_mask,
-                          labels=edg_seq,
-                              vert_attn_mask=vert_attn_mask)
+                enc_attn = data['enc_attn'].cuda()
+                dec_attn = data['dec_attn'].cuda()
 
-                all_val_stats.append(loss[0].mean().item())
+                if args.flipped:
+                    loss = model(enc_seq=dec_seq,
+                                dec_seq=enc_seq,
+                                enc_attn_mask=dec_attn,
+                                dec_attn_mask=enc_attn,
+                                labels=dec_seq)
+                else:
+                    loss = model( enc_seq=enc_seq,
+                        dec_seq=dec_seq,
+                        enc_attn_mask=enc_attn,
+                        dec_attn_mask=dec_attn,
+                        labels=dec_seq)
+
+                all_val_stats.append(loss[1].mean().item())
 
 
-                # writer.add_scalar('loss/val', loss[0].mean(), global_step=val_steps)
-
-                # global_steps += 1
-                # val_steps += val_step_size
             total_nll = np.mean(np.asarray(all_val_stats))
             wandb.log({'loss/val': total_nll}, step=global_steps)
             global_steps += 1
 
-        if total_nll <= best_nll:
+        if total_nll < best_nll:
             best_nll = total_nll
-            torch.save(model.state_dict(), SAVE_LOCATION + f'model_walls_best.pth')
+            torch.save(model.state_dict(), SAVE_LOCATION + f'model_cond_best.pth')
 
-    # writer.close()
 
 
 
