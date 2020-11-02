@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
     parser.add_argument('--wh', default=False, type=bool, help='number of decoder layers')
-
+    parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
     # optimizer
     parser.add_argument('--bs', default=64, type=int, help='batch size')
@@ -77,6 +77,10 @@ if __name__ == '__main__':
 
     dloader = DataLoader(val_set, batch_size=BATCH_SIZE, num_workers=10)
 
+    if args.flipped:
+        enc_is_causal=True
+        dec_is_causal=False
+
     # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
         vocab_size=args.vocab,
@@ -85,7 +89,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,
-        is_causal=False,
+        is_causal=enc_is_causal,
         is_encoder=True,
     )
 
@@ -96,7 +100,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.dec_layer,
         n_head=12,
-        is_causal=True,
+        is_causal=dec_is_causal,
         is_encoder=False,
         n_types=args.tuples
     )
@@ -137,18 +141,21 @@ if __name__ == '__main__':
             attn_mask[:, :ii+1] = 1
             # print(attn_mask.shape)
             with torch.no_grad():
-                loss = model(enc_seq=enc_seq,
-                             dec_seq=input_ids,
-                             enc_attn_mask=enc_attn,
-                             dec_attn_mask=attn_mask
-                             )
+                if args.flipped:
+                logits = model(enc_seq=dec_seq,
+                            dec_seq=enc_seq,
+                            enc_attn_mask=dec_attn,
+                            dec_attn_mask=enc_attn
+                            )
+            else:
+                logits = model( enc_seq=enc_seq,
+                    dec_seq=dec_seq,
+                    enc_attn_mask=enc_attn,
+                    dec_attn_mask=dec_attn
+                    )
 
                 logits = top_k_top_p_filtering(loss[0][:, ii, :], top_p=0.9)
-                # logits = loss[0][:, ii, :] / 0.8
                 probs = torch.softmax(logits.squeeze(), dim=-1)
-                # print(probs[0])
-                # if ii == 4:
-                #     sys.exit()
                 next_token = torch.multinomial(probs, num_samples=1)
 
             # print(next_token.shape)

@@ -80,7 +80,8 @@ if __name__ == '__main__':
                      dec_len=args.dec_n,
                      drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
-                     wh=args.wh)
+                     wh=args.wh,
+                     transforms=Compose(Rot90()))
         val_set = RplanConditional(root_dir=args.datapath,
                               split='val',
                               enc_len=args.enc_n,
@@ -128,6 +129,10 @@ if __name__ == '__main__':
         enc_is_causal=True
         dec_is_causal=False
         PROJECT = 'conditional_flipped'
+    else:
+        enc_is_causal = False,
+        dec_is_causal = True
+        PROJECT = 'demo_conditional'
 
 
     enc = GPT2Config(
