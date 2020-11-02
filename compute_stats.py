@@ -3,7 +3,6 @@ import math
 import numpy as np
 import scipy.sparse.csgraph as csg
 import scipy.stats as sps
-import torch
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -13,41 +12,20 @@ plt.rcParams.update({'figure.max_open_warning': 0}) # to avoid warnings that too
 # from dataset import load_label_colors, load_egraph
 # from options import import_legacy_train_options
 
-from load_boxes import get_sample_names, load_boxes
-from convert_boxes_to_rooms import convert_boxes_to_rooms
+from load_boxes import get_room_sample_names, load_rooms
+# from convert_boxes_to_rooms import convert_boxes_to_rooms
 
 # compute egraph statistics
-def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
+def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_types=None):
+
+    if node_type is None:
+        raise ValueError('Need node type.')
 
     stats = {}
-
-    if (points is not None and points.dim() != 3) or \
-       (point_type is not None and point_type.dim() != 3) or \
-       (adj is not None and adj.dim() != 3):
-        raise ValueError('each egraph property must be a batched tensor.')
-
-    if point_type is None:
-        raise ValueError('Need point type.')
-
-    points = points.clone().cpu().numpy() if points is not None else None
-    point_type = point_type.clone().cpu().numpy() if point_type is not None else None
-    adj = adj.clone().cpu().numpy() if adj is not None else None
-
-    # one-hot to index
-    if point_type is not None:
-        if point_type.shape[1] != 1:
-            point_type = point_type.argmax(axis=1).reshape([point_type.shape[0], 1, -1])
-
-    # symmetrize and binarize adjacency
-    if adj is not None:
-        adj = adj + adj.swapaxes(1, 2) >= 1
-
-    batch_size = points.shape[0] if points is not None else (point_type.shape[0] if point_type is not None else adj.shape[0])
-
-    if point_type is not None:
+    if node_type is not None:
         stats['type_count'] = []
 
-    if points is not None:
+    if nodes is not None:
         stats['center_x'] = []
         stats['center_y'] = []
         stats['area'] = []
@@ -62,14 +40,14 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
         stats['side_align_second_worst'] = []
         stats['side_align_worst'] = []
 
-    if adj is not None:
+    if edges is not None:
         stats['neighbor_count_hist'] = []
         stats['neighbor_type_hist'] = []
         stats['unreachable'] = []
         stats['exterior_dist'] = []
         stats['type_dist'] = []
 
-    if points is not None and adj is not None:
+    if nodes is not None and edges is not None:
         stats['neighbor_center_x_dist'] = []
         stats['neighbor_center_y_dist'] = []
         stats['neighbor_gap'] = []
@@ -80,57 +58,61 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
         stats['neighbor_side_align_second_worst'] = []
         stats['neighbor_side_align_worst'] = []
 
+    batch_size = len(node_type) if node_type is not None else (len(nodes) if nodes is not None else len(edges))
     for b in range(batch_size):
-        pt = point_type[b, 0, :] if point_type is not None else None
-        p = points[b, :, :] if points is not None else None
-        a = adj[b, :, :] if adj is not None else None
+        nt = node_type[b].copy()
+        n = nodes[b].copy().astype(np.float32) if nodes is not None else None
+        e = edges[b].copy() if edges is not None else None
 
-        # # undo whitening and feature scaling (afterwards 1 unit should be 1 meter)
-        # if p is not None:
-        #     active_mask = pt > 0.5
-        #     if node_mean is not None or node_std is not None:
-        #         p[:, active_mask] = (p[:, active_mask] * node_std.numpy()[0, :, np.newaxis] + node_mean.numpy()[0, :, np.newaxis])
-        #     if node_feature_scaling is not None:
-        #         p[:, active_mask] = p[:, active_mask] / node_feature_scaling
+        if (nt is not None and nt.ndim != 1) or (n is not None and n.ndim != 2) or (e is not None and e.ndim != 2):
+            raise ValueError('Incorrect shape for nodes or edges.')
 
         # check for empty floor plans
-        if p.size == 0:
+        if nt.size == 0:
             print('** Warning: skipping a floor plan without rooms. **')
             continue
 
+        # create adjacency matrix from edge list
+        if e is not None:
+            a = np.zeros([nt.size, nt.size], dtype=np.bool)
+            a[e[:, 0], e[:, 1]] = True
+            a = a | a.transpose() # symmetrize
+        else:
+            a = None
+
         if exclude_types is not None:
-            include_mask = np.all([pt != et for et in exclude_types], axis=0)
-            pt = pt[include_mask] if pt is not None else None
-            p = p[:, include_mask] if p is not None else None
-            a = a[:, include_mask][include_mask, :] if a is not None else None
+            include_mask = np.all([nt != et for et in exclude_types], axis=0)
+            nt = nt[include_mask]
+            n = n[include_mask, :] if n is not None else None
+            a = a[include_mask, :][:, include_mask] if a is not None else None
 
-        exterior_mask = pt == 1
+        exterior_mask = nt == exterior_type
 
-        if (pt == 1).all():
+        if exterior_mask.all():
             print('** Warning: skipping a floor plan with only exterior. **')
             continue
 
-        if p is not None:
-            x = p[0:1, :]
-            y = p[1:2, :]
-            w = p[2:3, :]
-            h = p[3:4, :]
+        if n is not None:
+            min_x = n[:, 0]
+            min_y = n[:, 1]
+            w = n[:, 2]
+            h = n[:, 3]
 
-            left = x - w/2
-            right = x + w/2
-            bottom = y - h/2
-            top = y + h/2
+            max_x = min_x + w
+            max_y = min_y + h
+            center_x = min_x + w/2.0
+            center_y = min_y + h/2.0
 
-        if pt is not None:
+        if nt is not None:
             type_bin_centers, type_bin_edges = hist_bins_uniform(0, label_count-1, label_count)
 
             stats['type_count'].append({
                 'x': type_bin_centers,
-                'y': np.histogram(pt, bins=type_bin_edges)[0]})
+                'y': np.histogram(nt, bins=type_bin_edges)[0]})
 
-        if p is not None:
+        if n is not None:
 
-            pair_mask = np.ones([p.shape[1], p.shape[1]], dtype=bool)
+            pair_mask = np.ones([n.shape[0], n.shape[0]], dtype=bool)
             pair_mask[np.tril_indices(pair_mask.shape[0], -1)] = False
             # exclude exterior from pairs
             pair_mask[:, exterior_mask] = False
@@ -141,34 +123,34 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
 
             stats['center_x'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt, x[0], bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt, center_x, bins=[type_bin_edges, val_bin_edges])[0]})
             stats['center_y'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt, y[0], bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt, center_y, bins=[type_bin_edges, val_bin_edges])[0]})
 
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 60, 21, negative_overflow=True, positive_overflow=True)
             stats['area'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt, w[0] * h[0], bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt, w * h, bins=[type_bin_edges, val_bin_edges])[0]})
 
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 1, 21, negative_overflow=True, positive_overflow=True)
-            max_len = p[2:4, :].max(axis=0)
-            min_len = p[2:4, :].min(axis=0)
+            max_len = n[:, [2, 3]].max(axis=1)
+            min_len = n[:, [2, 3]].min(axis=1)
             aspect = np.zeros(max_len.shape)
             mask = max_len > 0
             aspect[mask] = min_len[mask] / max_len[mask]
             stats['aspect'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt, aspect, bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt, aspect, bins=[type_bin_edges, val_bin_edges])[0]})
 
             # axis-aligned center distance
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 40, 41, negative_overflow=False, positive_overflow=True)
-            offsets = x - x.transpose()
+            offsets = center_x.reshape(1, -1) - center_x.reshape(-1, 1)
             offsets = np.absolute(offsets[pair_mask])
             stats['center_x_dist'].append({
                 'x': val_bin_centers,
                 'y': np.histogram(offsets, bins=val_bin_edges)[0] / num_pairs})
-            offsets = y - y.transpose()
+            offsets = center_y.reshape(1, -1) - center_y.reshape(-1, 1)
             offsets = np.absolute(offsets[pair_mask])
             stats['center_y_dist'].append({
                 'x': val_bin_centers,
@@ -177,10 +159,12 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
             val_bin_centers, val_bin_edges = hist_bins_uniform(-20, 20, 21, negative_overflow=True, positive_overflow=True)
-            gap_x = np.maximum(left - right.transpose(),
-                               left.transpose() - right)
-            gap_y = np.maximum(bottom - top.transpose(),
-                               bottom.transpose() - top)
+            gap_x = np.maximum(
+                min_x.reshape(1, -1) - max_x.reshape(-1, 1),
+                min_x.reshape(-1, 1) - max_x.reshape(1, -1))
+            gap_y = np.maximum(
+                min_y.reshape(1, -1) - max_y.reshape(-1, 1),
+                min_y.reshape(-1, 1) - max_y.reshape(1, -1))
             gap = np.maximum(gap_x, gap_y)
             gap = gap[pair_mask]
             stats['gap'].append({
@@ -189,8 +173,8 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
 
             # alignment
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 41, negative_overflow=False, positive_overflow=True)
-            dist_center_x = np.absolute((x - x.transpose())[pair_mask])
-            dist_center_y = np.absolute((y - y.transpose())[pair_mask])
+            dist_center_x = np.absolute((center_x.reshape(1, -1) - center_x.reshape(-1, 1))[pair_mask])
+            dist_center_y = np.absolute((center_y.reshape(1, -1) - center_y.reshape(-1, 1))[pair_mask])
             dist_center = np.stack([dist_center_x, dist_center_y])
             stats['center_align_best'].append({
                 'x': val_bin_centers,
@@ -199,10 +183,10 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
                 'x': val_bin_centers,
                 'y': np.histogram(dist_center.max(axis=0), bins=val_bin_edges)[0] / num_pairs})
 
-            dist_side_left = np.absolute((left - left.transpose())[pair_mask])
-            dist_side_right = np.absolute((right - right.transpose())[pair_mask])
-            dist_side_bottom = np.absolute((bottom - bottom.transpose())[pair_mask])
-            dist_side_top = np.absolute((top - top.transpose())[pair_mask])
+            dist_side_left = np.absolute((min_x.reshape(1, -1) - min_x.reshape(-1, 1))[pair_mask])
+            dist_side_right = np.absolute((max_x.reshape(1, -1) - max_x.reshape(-1, 1))[pair_mask])
+            dist_side_bottom = np.absolute((min_y.reshape(1, -1) - min_y.reshape(-1, 1))[pair_mask])
+            dist_side_top = np.absolute((max_y.reshape(1, -1) - max_y.reshape(-1, 1))[pair_mask])
             dist_side = np.stack([dist_side_left, dist_side_right, dist_side_bottom, dist_side_top])
             dist_side.sort(axis=0)
             stats['side_align_best'].append({
@@ -223,17 +207,17 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 21, negative_overflow=False, positive_overflow=True)
             stats['neighbor_count_hist'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt, a.sum(axis=0), bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt, a.sum(axis=0), bins=[type_bin_edges, val_bin_edges])[0]})
 
             idx1, idx2 = np.nonzero(a)
             stats['neighbor_type_hist'].append({
                 'x': (type_bin_centers, type_bin_centers),
-                'y': np.histogram2d(pt[idx1], pt[idx2], bins=[type_bin_edges]*2)[0]})
+                'y': np.histogram2d(nt[idx1], nt[idx2], bins=[type_bin_edges]*2)[0]})
 
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 10, 11, negative_overflow=False, positive_overflow=True)
             graph = csg.csgraph_from_dense(a)
             gdists = csg.shortest_path(graph, directed=False, unweighted=True)
-            exterior_inds, = np.nonzero(pt == 1)
+            exterior_inds, = np.nonzero(nt == exterior_type)
             if exterior_inds.size > 0:
                 exterior_dists = np.min(gdists[exterior_inds, :], axis=0)
             else:
@@ -241,19 +225,19 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
             unreachable_mask = exterior_dists == np.inf
             stats['unreachable'].append({
                 'x': type_bin_centers,
-                'y': np.histogram(pt[unreachable_mask], bins=type_bin_edges)[0]})
+                'y': np.histogram(nt[unreachable_mask], bins=type_bin_edges)[0]})
             reachable_mask = np.logical_not(unreachable_mask)
             stats['exterior_dist'].append({
                 'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(pt[reachable_mask], exterior_dists[reachable_mask], bins=[type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogram2d(nt[reachable_mask], exterior_dists[reachable_mask], bins=[type_bin_edges, val_bin_edges])[0]})
 
             reachable_mask = gdists != np.inf
             idx1, idx2 = np.nonzero(reachable_mask)
             stats['type_dist'].append({
                 'x': (type_bin_centers, type_bin_centers, val_bin_centers),
-                'y': np.histogramdd([pt[idx1], pt[idx2], gdists[reachable_mask]], bins=[type_bin_edges, type_bin_edges, val_bin_edges])[0]})
+                'y': np.histogramdd([nt[idx1], nt[idx2], gdists[reachable_mask]], bins=[type_bin_edges, type_bin_edges, val_bin_edges])[0]})
 
-        if p is not None and a is not None:
+        if n is not None and a is not None:
 
             pair_mask = a.copy()
             pair_mask[np.tril_indices(pair_mask.shape[0], -1)] = False
@@ -264,12 +248,12 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
 
             # axis-aligned center distance
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 40, 41, negative_overflow=False, positive_overflow=True)
-            offsets = x - x.transpose()
+            offsets = center_x.reshape(1, -1) - center_x.reshape(-1, 1)
             offsets = np.absolute(offsets[pair_mask])
             stats['neighbor_center_x_dist'].append({
                 'x': val_bin_centers,
                 'y': np.histogram(offsets, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
-            offsets = y - y.transpose()
+            offsets = center_y.reshape(1, -1) - center_y.reshape(-1, 1)
             offsets = np.absolute(offsets[pair_mask])
             stats['neighbor_center_y_dist'].append({
                 'x': val_bin_centers,
@@ -278,10 +262,12 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
             val_bin_centers, val_bin_edges = hist_bins_uniform(-20, 20, 21, negative_overflow=True, positive_overflow=True)
-            gap_x = np.maximum(left - right.transpose(),
-                               left.transpose() - right)
-            gap_y = np.maximum(bottom - top.transpose(),
-                               bottom.transpose() - top)
+            gap_x = np.maximum(
+                min_x.reshape(1, -1) - max_x.reshape(-1, 1),
+                min_x.reshape(-1, 1) - max_x.reshape(1, -1))
+            gap_y = np.maximum(
+                min_y.reshape(1, -1) - max_y.reshape(-1, 1),
+                min_y.reshape(-1, 1) - max_y.reshape(1, -1))
             gap = np.maximum(gap_x, gap_y)
             gap = gap[pair_mask]
             stats['neighbor_gap'].append({
@@ -290,8 +276,8 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
 
             # alignment
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 41, negative_overflow=False, positive_overflow=True)
-            dist_center_x = np.absolute((x - x.transpose())[pair_mask])
-            dist_center_y = np.absolute((y - y.transpose())[pair_mask])
+            dist_center_x = np.absolute((center_x.reshape(1, -1) - center_x.reshape(-1, 1))[pair_mask])
+            dist_center_y = np.absolute((center_y.reshape(1, -1) - center_y.reshape(-1, 1))[pair_mask])
             dist_center = np.stack([dist_center_x, dist_center_y])
             stats['neighbor_center_align_best'].append({
                 'x': val_bin_centers,
@@ -300,10 +286,10 @@ def egraph_stats(points, point_type, adj, label_count, exclude_types=None):
                 'x': val_bin_centers,
                 'y': np.histogram(dist_center.max(axis=0), bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
 
-            dist_side_left = np.absolute((left - left.transpose())[pair_mask])
-            dist_side_right = np.absolute((right - right.transpose())[pair_mask])
-            dist_side_bottom = np.absolute((bottom - bottom.transpose())[pair_mask])
-            dist_side_top = np.absolute((top - top.transpose())[pair_mask])
+            dist_side_left = np.absolute((min_x.reshape(1, -1) - min_x.reshape(-1, 1))[pair_mask])
+            dist_side_right = np.absolute((max_x.reshape(1, -1) - max_x.reshape(-1, 1))[pair_mask])
+            dist_side_bottom = np.absolute((min_y.reshape(1, -1) - min_y.reshape(-1, 1))[pair_mask])
+            dist_side_top = np.absolute((max_y.reshape(1, -1) - max_y.reshape(-1, 1))[pair_mask])
             dist_side = np.stack([dist_side_left, dist_side_right, dist_side_bottom, dist_side_top])
             dist_side.sort(axis=0)
             stats['neighbor_side_align_best'].append({
@@ -523,7 +509,7 @@ def save_stats(filename, stats):
 def load_stats(filename):
     return np.load(filename, allow_pickle=True).item()
 
-def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, filename=None):
+def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, filename=None):
 
     if isinstance(real_stats, str):
         real_stats = load_stats(filename=real_stats)
@@ -531,19 +517,6 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, filename=None)
         fake_stats = load_stats(filename=fake_stats)
     if isinstance(stat_dists, str):
         stat_dists = load_stats(filename=stat_dists)
-
-    label_names = [
-        'Exterior',
-        'Wall',
-        'Kitchen',
-        'Bedroom',
-        'Bathroom',
-        'Living Room',
-        'Office',
-        'Garage',
-        'Balcony',
-        'Hallway',
-        'Other Room']
 
     for stat_name, fake_stat in fake_stats.items():
         stat_x = fake_stat['x']
@@ -718,42 +691,30 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, filename=None)
 
     # return figs
 
-def compute_egraph_set_stats(out_filename, box_dir, door_dir, wall_dir, sample_list, suffix, label_count, exclude_types):
-
-    # egraph_names = []
-    # with open(egraph_list_filename) as f:
-    #     egraph_names = f.readlines()
-    # egraph_names = [x.strip() for x in egraph_names]
-    # egraph_names = list(filter(None, egraph_names))
-    # egraph_names = [os.path.join(egraph_dir, gn+egraph_suffix) for gn in egraph_names]
-
-    sample_names = get_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list)
+def compute_egraph_set_stats(out_filename, room_basepath, label_count, exterior_type, exclude_types):
 
     set_stats = None
-    for sample_name in tqdm(sample_names):
-        boxes, door_edges, wall_edges, sample_names = load_boxes(sample_names=[sample_name], box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
 
-        # try:
-        # this should already be filtered, so we should get no parsing errors here
-        room_types, room_bboxes, room_door_adj, room_masks = convert_boxes_to_rooms(
-            boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=label_count)
-        # except ValueError as err:
-        #     print(f'WARNING: could not parse sample {sample_name}:\n{err}')
-        #     continue
+    sample_names = get_room_sample_names(base_path=room_basepath)
 
-        node_type = room_types[0].unsqueeze(dim=0)
-        pt = room_bboxes[0].to(dtype=torch.float32)
-        a = room_door_adj[0].to(dtype=torch.float32)
+    batch_size = 100
+    batch_count = math.ceil(len(sample_names) / batch_size)
+    for batch_idx in tqdm(range(batch_count)):
+        samples_from = batch_size*batch_idx
+        samples_to = min(batch_size*(batch_idx+1), len(sample_names))
+        batch_sample_names = sample_names[samples_from:samples_to]
+
+        room_types, room_bboxes, room_door_edges, _, _ = load_rooms(
+            base_path=room_basepath, sample_names=batch_sample_names)
 
         stats = egraph_stats(
-            points=pt.unsqueeze(dim=0), point_type=node_type.unsqueeze(dim=0), adj=a.unsqueeze(dim=0),
-            label_count=label_count, exclude_types=exclude_types)
+            node_type=room_types, nodes=room_bboxes, edges=room_door_edges,
+            label_count=label_count, exterior_type=exterior_type, exclude_types=exclude_types)
         if set_stats is None:
             set_stats = stats
         else:
             for stat_name, stat in stats.items():
                 set_stats[stat_name].extend(stat) # pylint: disable=E1136
-
 
     set_stats = egraph_set_stats(stats=set_stats, label_count=label_count)
 
@@ -765,36 +726,17 @@ def compute_egraph_set_stats(out_filename, box_dir, door_dir, wall_dir, sample_l
 
 # either provide real_stat_filename and fake_stat_filename,
 # or all the arguments below these two to compute the stats
-def compute_egraph_set_stat_dists(
-        out_dirname,
-        real_stat_filename=None, fake_stat_filename=None,
-        real_egraph_dir=None, fake_egraph_dir=None,
-        exclude_types=None, vis=True):
+def compute_egraph_set_stat_dists(out_dirname, real_stat_filename=None, fake_stat_filename=None, vis=True, label_names=None):
 
     if not os.path.exists(out_dirname):
         os.makedirs(out_dirname)
 
-    if real_stat_filename is not None:
-        print('loading stats of real egraph set ...')
-        real_set_stats = load_stats(filename=real_stat_filename)
-        save_stats(filename=os.path.join(out_dirname, 'stats_real.npy'), stats=real_set_stats)
-    else:
-        print('computing stats of real egraph set ...')
-        real_set_stats = compute_egraph_set_stats(
-            out_filename=os.path.join(out_dirname, 'stats_real.npy'), egraph_dir=real_egraph_dir,
-            node_dim=node_dim, label_count=label_count, exclude_types=exclude_types)
+    real_set_stats = load_stats(filename=real_stat_filename)
+    save_stats(filename=os.path.join(out_dirname, 'stats_real.npy'), stats=real_set_stats)
 
-    if fake_stat_filename is not None:
-        print('loading stats of fake egraph set ...')
-        fake_set_stats = load_stats(filename=fake_stat_filename)
-        save_stats(filename=os.path.join(out_dirname, 'stats_fake.npy'), stats=fake_set_stats)
-    else:
-        print('computing stats of fake egraph set ...')
-        fake_set_stats = compute_egraph_set_stats(
-            out_filename=os.path.join(out_dirname, 'stats_fake.npy'), egraph_dir=fake_egraph_dir,
-            node_dim=node_dim, label_count=label_count, exclude_types=exclude_types)
+    fake_set_stats = load_stats(filename=fake_stat_filename)
+    save_stats(filename=os.path.join(out_dirname, 'stats_fake.npy'), stats=fake_set_stats)
 
-    print('computing stat difference ...')
     sds = egraph_set_stat_dists(stats1=fake_set_stats, stats2=real_set_stats)
 
     # save stats distance as npy file and distance summary as text file
@@ -803,9 +745,8 @@ def compute_egraph_set_stat_dists(
 
     # visualize stat difference
     if vis:
-        print('visualizing stat difference ...')
         vis_egraph_set_stat_dists(
-            real_stats=real_set_stats, fake_stats=fake_set_stats, stat_dists=sds,
+            real_stats=real_set_stats, fake_stats=fake_set_stats, stat_dists=sds, label_names=label_names,
             filename=os.path.join(out_dirname, 'vis'))
 
 def save_egraph_set_stat_dists(stat_dists, filename):
@@ -842,113 +783,120 @@ if __name__ == '__main__':
 
     from convert_boxes_to_rooms import room_type_names
 
-    exclude_types = [1]
+    label_names = [
+        'Exterior',
+        'Wall',
+        'Kitchen',
+        'Bedroom',
+        'Bathroom',
+        'Living Room',
+        'Office',
+        'Garage',
+        'Balcony',
+        'Hallway',
+        'Other Room']
+
+    exterior_type = label_names.index('Exterior')
+    exclude_types = [label_names.index('Wall')]
     compute_stats = True
     compute_stat_distances = True
 
     if compute_stats:
 
         result_sets = [
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_0.9', 'door_dir': '../data/results/5_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_0.9/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_0.9_walls_0.9.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_0.9_walls_1.0.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_1.0_walls_0.9.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_1.0_walls_1.0.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
-            
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_0.9.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_1.0.txt', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            # {'box_dir': '../data/results/rplan_on_rplan', 'sample_list': '../data/results/rplan_on_rplan/all.txt', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
-            # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
-            
-            # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
-            # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
+
+            {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+
+            {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
+            {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
 
-            box_dir = result_set['box_dir']
-            door_dir = result_set['door_dir'] if 'door_dir' in result_set else None
-            wall_dir = result_set['wall_dir'] if 'wall_dir' in result_set else None
-            sample_list = result_set['sample_list'] if 'sample_list' in result_set else None
-            suffix = result_set['suffix'] if 'suffix' in result_set else ''
+            room_basepath = result_set['room_basepath'] 
             out_filename = result_set['out_filename']
 
             print(f'result set [{rsi+1}/{len(result_sets)}]: {out_filename}')
-        
-            compute_egraph_set_stats(
-                out_filename=out_filename, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list=sample_list,
-                suffix=suffix, label_count=len(room_type_names), exclude_types=exclude_types)
 
-    
+            compute_egraph_set_stats(
+                out_filename=out_filename, room_basepath=room_basepath, label_count=len(room_type_names), exterior_type=exterior_type, exclude_types=exclude_types)
+
+
     if compute_stat_distances:
 
         stat_dist_sets = [
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
             {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
         ]
-        
+
         for rsi, stat_dist_set in enumerate(stat_dist_sets):
             real_stat_filename = stat_dist_set['real_stat_filename']
             fake_stat_filename = stat_dist_set['fake_stat_filename']
             out_dirname = os.path.join(os.path.dirname(fake_stat_filename), 'stat_dists')
 
             print(f'stat distance set [{rsi+1}/{len(stat_dist_sets)}]: {out_dirname}')
-        
+
             compute_egraph_set_stat_dists(
-                out_dirname=out_dirname,
-                real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename,
-                exclude_types=exclude_types, vis=True)
+                out_dirname=out_dirname, real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename, vis=True, label_names=label_names)
