@@ -16,15 +16,15 @@ class Flip(object):
                  p=0.5):
         self.idx = idx
         self.len_sample = len_sample
-        self.width = width
         self.p = p
 
 
     def __call__(self, x):
         if torch.rand(1) < self.p:
-            x[self.idx::self.len_sample] = 2 + self.width - x[self.idx::self.len_sample]
+            flipped = x.copy()
+            flipped[:, 1] = 64 - x[:, 1]
 
-        return x
+        return flipped
 
 class Rot90(object):
     def __init__(self,
@@ -35,16 +35,12 @@ class Rot90(object):
 
     def __call__(self, x):
         if torch.rand(1) < self.p:
-            bkup = x[1::self.len_sample]
-            x[1::self.len_sample] = x[2::self.len_sample]
-            x[2::self.len_sample] = bkup
+            rotted = x.copy()
+            rotted[:, [1, 2]] = rotted[:, [2, 1]]
+            if rotted.shape[-1] == 5:
+                rotted[:, [3,4 ]] = rotted[:, [4, 3]]
 
-            if self.len_sample > 3:
-                bkup = x[3::self.len_sample]
-                x[3::self.len_sample] = x[4::self.len_sample]
-                x[4::self.len_sample] = bkup
-
-        return x
+        return rotted
 
 class Identity(object):
     def __init__(self):
@@ -97,11 +93,11 @@ class Rplan(Dataset):
             tokens = np.load(path)
             if self.drop_dim:
                 if self.wh:
-                    tokens = tokens[:, [0, 3, 4]]
+                    tokens = self.transforms(tokens[:, [0, 3, 4]])
                 else:
-                    tokens = tokens[:, :3]
+                    tokens = self.transforms(tokens[:, :3])
             tokens = tokens.ravel() + 1 # shift original by 1
-            tokens = self.transforms(tokens)
+            # tokens = tokens)
             tokens = np.hstack((zero_token, tokens, stop_token))
             length = len(tokens)
 
@@ -171,9 +167,9 @@ class RplanConditional(Dataset):
             tokens = np.load(path)
             if self.drop_dim:
                 if self.wh:
-                    tokens = tokens[:, [0, 3, 4]]
+                    tokens = self.transforms(tokens[:, [0, 3, 4]])
                 else:
-                    tokens = tokens[:, :3]
+                    tokens = self.transforms(tokens[:, :3])
 
             tokens = tokens + 1
 
