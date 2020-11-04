@@ -28,9 +28,7 @@ class Flip(object):
 
 class Rot90(object):
     def __init__(self,
-                 len_sample,
                  p=0.5):
-        self.len_sample = len_sample
         self.p = p
 
     def __call__(self, x):
@@ -207,6 +205,142 @@ class RplanConditional(Dataset):
                 'dec_attn': torch.tensor(dec_attn),
                 'enc_pos_id': torch.tensor(enc_pos_id).long(),
                 'dec_pos_id': torch.tensor(dec_pos_id).long()}
+
+
+    def __len__(self):
+        return len(self.file_names)
+
+
+class RplanConditionalDoors(Dataset):
+    def ___init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 seq_len=200,
+                 vocab_size=65,
+                 edg_len=100,
+                 transforms=None,
+                 dims=5,
+                 doors='all',
+                 lifull=False):
+        super().__init__()
+
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = seq_len
+        self.vocab_size = vocab_size
+        self.edg_len = edg_len
+        if dims not in [3, 5]:
+            raise ValueError('Dims can only be 3 or 5')
+        self.dims = dims
+        self.doors = doors
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_image_nodoor_xyhw.npy')
+
+        if self.doors == 'all':
+            suffix = '_doorlist_all.pkl'
+
+        elif self.doors == 'vert':
+            suffix = '_doorlist_v.pkl'
+
+        elif self.doors == 'horiz':
+            suffix = '_doorlist_h.pkl'
+
+        else:
+            raise ValueError('The door type is invalid')
+
+
+
+        door_file = os.path.join(self.root_dir,
+                                 self.file_names[idx].strip('\n') + \
+                                 self.suffix + suffix)
+
+        if not os.path.exists(door_file):
+            door_file = os.path.join(self.root_dir,
+                                     self.file_names[0].strip('\n') + \
+                                     self.suffix + suffix)
+            print(door_file)
+
+        # create the vertex_data first
+
+        ext_boxes = []
+        int_boxes = []
+        num_interior = 0
+        mapper = dict()
+
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1: # idx has been added by one
+                    ext_boxes.append(idx)
+                else:
+                    mapper[idx] = num_interior
+                    num_interior += 1
+                    int_boxes.append(idx)
+
+        tokens = tokens[int_boxes, :]
+        length = len(tokens)
+
+        vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0,) * self.dims
+        vert_seq[2:length+2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length+2] = 1
+
+        # create the door data
+        flat_list = []
+        with open(door_file, 'rb') as f:
+            door_list = pickle.load(f)
+            # print(door_list)
+            for sublist in door_list:
+
+                flat_list += [mapper[sublist[0]], mapper[sublist[1]]]
+                flat_list += [-1]
+            flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
+            length = len(flat_list)
+
+        # print(flat_list)
+        edg_seq = np.ones(self.edg_len) * -2
+
+        # print(flat_list)
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
 
 
     def __len__(self):

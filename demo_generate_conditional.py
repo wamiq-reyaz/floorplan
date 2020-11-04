@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
     parser.add_argument('--wh', default=False, type=bool, help='number of decoder layers')
-
+    parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
     # optimizer
     parser.add_argument('--bs', default=64, type=int, help='batch size')
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # BATCH_SIZE = args.bs
     BATCH_SIZE = 10
     val_set = RplanConditional(root_dir=args.input_dir,
-                               split='val',
+                               split='test',
                                enc_len=args.enc_n,
                                dec_len=args.dec_n,
                                vocab_size=args.vocab,
@@ -76,6 +76,13 @@ if __name__ == '__main__':
                                wh=args.wh)
 
     dloader = DataLoader(val_set, batch_size=BATCH_SIZE, num_workers=10)
+
+    if args.flipped:
+        enc_is_causal=True
+        dec_is_causal=False
+    else:
+        enc_is_causal=False
+        dec_is_causal=True
 
     # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
@@ -85,7 +92,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,
-        is_causal=False,
+        is_causal=enc_is_causal,
         is_encoder=True,
     )
 
@@ -96,7 +103,7 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.dec_layer,
         n_head=12,
-        is_causal=True,
+        is_causal=dec_is_causal,
         is_encoder=False,
         n_types=args.tuples
     )
@@ -124,6 +131,8 @@ if __name__ == '__main__':
     model.eval()
 
     for jj, data in tqdm(enumerate(dloader)):
+        if jj != 8:
+            continue
         enc_seq = data['enc_seq'].cuda()
         enc_attn = data['enc_attn'].cuda()
         enc_pos = data['enc_pos_id'].cuda()
@@ -131,35 +140,34 @@ if __name__ == '__main__':
 
         bs = enc_seq.shape[0]
         input_ids = torch.zeros(args.dec_n, dtype=torch.long).to(device=device).unsqueeze(0).repeat(bs, 1)
-        # position_ids = torch.arange(args.dec_n, dtype=torch.long, device=device).unsqueeze(0).repeat(bs, 1)
         attn_mask = torch.zeros(args.dec_n, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
         for ii in range(args.dec_n - 1):
             attn_mask[:, :ii+1] = 1
-            # print(attn_mask.shape)
             with torch.no_grad():
-                loss = model(enc_seq=enc_seq,
-                             dec_seq=input_ids,
-                             enc_attn_mask=enc_attn,
-                             dec_attn_mask=attn_mask
-                             )
+                if args.flipped:
+                    loss = model(enc_seq=input_ids,
+                                dec_seq=enc_seq,
+                                enc_attn_mask=attn_mask,
+                                dec_attn_mask=enc_attn
+                                )
+                else:
+                    loss = model( enc_seq=enc_seq,
+                        dec_seq=input_ids,
+                        enc_attn_mask=enc_attn,
+                        dec_attn_mask=attn_mask
+                        )
 
                 logits = top_k_top_p_filtering(loss[0][:, ii, :], top_p=0.9)
-                # logits = loss[0][:, ii, :] / 0.8
                 probs = torch.softmax(logits.squeeze(), dim=-1)
-                # print(probs[0])
-                # if ii == 4:
-                #     sys.exit()
                 next_token = torch.multinomial(probs, num_samples=1)
 
-            # print(next_token.shape)
             input_ids[:, ii+1] = next_token.squeeze()
-            # input_ids = torch.cat([input_ids, next_token], dim=-1)
 
         # sys.exit()
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:]  # drop 0
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
-        # print(samples)
+        print(samples)
         for kk, curr_sample in enumerate(samples):
             # print(curr_sample.shape)
             stop_token_idx = np.argmax(curr_sample)
@@ -176,5 +184,5 @@ if __name__ == '__main__':
             with open(f'exterior_{kk}.npz', 'wb') as fd:
                 np.savez(fd, enc_seq.cpu().numpy()[kk, :])
 
-        # if jj == 4:
+        # if jj == 8:
         sys.exit()

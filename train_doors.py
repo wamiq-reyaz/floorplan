@@ -13,7 +13,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RrplanDoors
+from rplan import RrplanGraph, Flip, Rot90,RrplanDoors, RplanConditionalDoors
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
 
     # optimizer
-    parser.add_argument('--step', default=15, type=int, help='how many epochs before reducing lr')
+    parser.add_argument('--step', default=20, type=int, help='how many epochs before reducing lr')
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
     parser.add_argument('--gamma', default=0.1, type=float, help='reduction in lr')
     parser.add_argument('--bs', default=64, type=int, help='batch size')
@@ -53,6 +53,9 @@ if __name__ == '__main__':
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
     parser.add_argument('--dataset', default='rplan', type=str, help='dataset to train on')
     parser.add_argument('--lifull', default=False, type=bool, help='whether to train on lifull data')
+    parser.add_argument('--conditional', default=False, type=bool, help='whether to train on exterior'
+                                                                        ' boxes conditionally')
+
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
@@ -63,6 +66,11 @@ if __name__ == '__main__':
     if args.lifull:
         args.dataset = 'lifull'
 
+    if args.conditional:
+        base_dataset = RplanConditionalDoors
+    else:
+        base_dataset = RrplanDoors
+
     if args.dataset == 'rplan':
         if on_local():
             args.root_dir = './'
@@ -72,14 +80,16 @@ if __name__ == '__main__':
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
             args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
-        dset = RrplanDoors(root_dir=args.datapath,
+        dset = base_dataset(root_dir=args.datapath,
                      split='train',
                      seq_len=args.seq_len,
                      edg_len=args.edg_len,
                      vocab_size=args.vocab,
                      dims=args.tuples,
                      doors=args.doors)
-        val_set = RrplanDoors(root_dir=args.datapath,
+
+
+        val_set = base_dataset(root_dir=args.datapath,
                               split='val',
                               seq_len=args.seq_len,
                               edg_len=args.edg_len,
@@ -96,7 +106,7 @@ if __name__ == '__main__':
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
             args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
 
-        dset = RrplanDoors(root_dir=args.datapath,
+        dset = base_dataset(root_dir=args.datapath,
                            split='train',
                            seq_len=args.seq_len,
                            edg_len=args.edg_len,
@@ -105,7 +115,7 @@ if __name__ == '__main__':
                            doors=args.doors,
                            lifull=True)
 
-        val_set = RrplanDoors(root_dir=args.datapath,
+        val_set = base_dataset(root_dir=args.datapath,
                               split='val',
                               seq_len=args.seq_len,
                               edg_len=args.edg_len,
