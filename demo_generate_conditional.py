@@ -145,19 +145,6 @@ if __name__ == '__main__':
             attn_mask[:, :ii+1] = 1
             with torch.no_grad():
                 if args.flipped:
-<<<<<<< HEAD
-                logits = model(enc_seq=dec_seq,
-                            dec_seq=enc_seq,
-                            enc_attn_mask=dec_attn,
-                            dec_attn_mask=enc_attn
-                            )
-            else:
-                logits = model( enc_seq=enc_seq,
-                    dec_seq=dec_seq,
-                    enc_attn_mask=enc_attn,
-                    dec_attn_mask=dec_attn
-                    )
-=======
                     loss = model(enc_seq=input_ids,
                                 dec_seq=enc_seq,
                                 enc_attn_mask=attn_mask,
@@ -169,7 +156,6 @@ if __name__ == '__main__':
                         enc_attn_mask=enc_attn,
                         dec_attn_mask=attn_mask
                         )
->>>>>>> refs/remotes/origin/main
 
                 logits = top_k_top_p_filtering(loss[0][:, ii, :], top_p=0.9)
                 probs = torch.softmax(logits.squeeze(), dim=-1)
