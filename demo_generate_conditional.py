@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # BATCH_SIZE = args.bs
     BATCH_SIZE = 10
     val_set = RplanConditional(root_dir=args.input_dir,
-                               split='val',
+                               split='test',
                                enc_len=args.enc_n,
                                dec_len=args.dec_n,
                                vocab_size=args.vocab,
@@ -80,6 +80,9 @@ if __name__ == '__main__':
     if args.flipped:
         enc_is_causal=True
         dec_is_causal=False
+    else:
+        enc_is_causal=False
+        dec_is_causal=True
 
     # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
@@ -128,6 +131,8 @@ if __name__ == '__main__':
     model.eval()
 
     for jj, data in tqdm(enumerate(dloader)):
+        if jj != 8:
+            continue
         enc_seq = data['enc_seq'].cuda()
         enc_attn = data['enc_attn'].cuda()
         enc_pos = data['enc_pos_id'].cuda()
@@ -135,13 +140,12 @@ if __name__ == '__main__':
 
         bs = enc_seq.shape[0]
         input_ids = torch.zeros(args.dec_n, dtype=torch.long).to(device=device).unsqueeze(0).repeat(bs, 1)
-        # position_ids = torch.arange(args.dec_n, dtype=torch.long, device=device).unsqueeze(0).repeat(bs, 1)
         attn_mask = torch.zeros(args.dec_n, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
         for ii in range(args.dec_n - 1):
             attn_mask[:, :ii+1] = 1
-            # print(attn_mask.shape)
             with torch.no_grad():
                 if args.flipped:
+<<<<<<< HEAD
                 logits = model(enc_seq=dec_seq,
                             dec_seq=enc_seq,
                             enc_attn_mask=dec_attn,
@@ -153,20 +157,31 @@ if __name__ == '__main__':
                     enc_attn_mask=enc_attn,
                     dec_attn_mask=dec_attn
                     )
+=======
+                    loss = model(enc_seq=input_ids,
+                                dec_seq=enc_seq,
+                                enc_attn_mask=attn_mask,
+                                dec_attn_mask=enc_attn
+                                )
+                else:
+                    loss = model( enc_seq=enc_seq,
+                        dec_seq=input_ids,
+                        enc_attn_mask=enc_attn,
+                        dec_attn_mask=attn_mask
+                        )
+>>>>>>> refs/remotes/origin/main
 
                 logits = top_k_top_p_filtering(loss[0][:, ii, :], top_p=0.9)
                 probs = torch.softmax(logits.squeeze(), dim=-1)
                 next_token = torch.multinomial(probs, num_samples=1)
 
-            # print(next_token.shape)
             input_ids[:, ii+1] = next_token.squeeze()
-            # input_ids = torch.cat([input_ids, next_token], dim=-1)
 
         # sys.exit()
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:]  # drop 0
         # print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
-        # print(samples)
+        print(samples)
         for kk, curr_sample in enumerate(samples):
             # print(curr_sample.shape)
             stop_token_idx = np.argmax(curr_sample)
@@ -183,5 +198,5 @@ if __name__ == '__main__':
             with open(f'exterior_{kk}.npz', 'wb') as fd:
                 np.savez(fd, enc_seq.cpu().numpy()[kk, :])
 
-        # if jj == 4:
+        # if jj == 8:
         sys.exit()

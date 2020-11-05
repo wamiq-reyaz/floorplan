@@ -3,6 +3,10 @@ __pycache__
 *.pth
 *.png
 *.zip
+*.npz
+*.pkl
+*.json
+*.hdf5
 
 # temporary directories
 runs/

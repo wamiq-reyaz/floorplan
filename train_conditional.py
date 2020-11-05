@@ -81,9 +81,13 @@ if __name__ == '__main__':
                      drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
                      wh=args.wh,
+<<<<<<< HEAD
                      transforms=Compose([Rot90(),
                                         Flip()])
                                 )
+=======
+                     transforms=Compose(Rot90()))
+>>>>>>> refs/remotes/origin/main
         val_set = RplanConditional(root_dir=args.datapath,
                               split='val',
                               enc_len=args.enc_n,
@@ -171,7 +175,15 @@ if __name__ == '__main__':
     model = DataParallel(model.cuda())
 
     optimizer = Adam(model.parameters(), lr=args.lr, eps=1e-6)
-    lr_scheduler = StepLR(optimizer, step_size=args.step, gamma=args.gamma)
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,
+                                                       max_lr=args.lr,
+                                                       total_steps=args.epochs*len(dloader),
+                                                       epochs=args.epochs,
+                                                       div_factor=25,
+                                                       final_div_factor=75
+                                                       )
+
+    # lr_scheduler = StepLR(optimizer, step_size=args.step, gamma=args.gamma)
 
 
 
@@ -230,6 +242,7 @@ if __name__ == '__main__':
             loss[1].mean().backward()
 
             optimizer.step()
+            lr_scheduler.step()
 
             # if steps % 100 == 0:
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
@@ -237,7 +250,6 @@ if __name__ == '__main__':
 
         torch.save(model.state_dict(), SAVE_LOCATION + f'model_cond_3.pth')
 
-        lr_scheduler.step()
         model.eval()
         val_step_size = (global_steps - val_steps) // len(val_loader)
         all_val_stats = []

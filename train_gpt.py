@@ -55,7 +55,9 @@ if __name__ == '__main__':
         n_types=5
     )
     model = GPT2Model(config)
-
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
+    print(pytorch_total_params)
+    sys.exit()
     model = DataParallel(model.cuda())
 
     optimizer = Adam(model.parameters(), lr=1e-4)
