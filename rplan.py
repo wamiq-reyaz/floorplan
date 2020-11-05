@@ -212,7 +212,7 @@ class RplanConditional(Dataset):
 
 
 class RplanConditionalDoors(Dataset):
-    def ___init__(self, root_dir, split=None,
+    def __init__(self, root_dir, split=None,
                  pad_start=True, pad_end=True,
                  seq_len=200,
                  vocab_size=65,
@@ -247,6 +247,10 @@ class RplanConditionalDoors(Dataset):
             self.transforms = transforms
         else:
             self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
 
     def __getitem__(self, idx):
         path = os.path.join(self.root_dir,
@@ -305,6 +309,8 @@ class RplanConditionalDoors(Dataset):
         tokens = tokens[int_boxes, :]
         length = len(tokens)
 
+        # print(ext_boxess, int_boxes)
+
         vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
         vert_seq[0, :] = (0,) * self.dims
         vert_seq[2:length+2, :] = tokens
@@ -316,18 +322,18 @@ class RplanConditionalDoors(Dataset):
         flat_list = []
         with open(door_file, 'rb') as f:
             door_list = pickle.load(f)
-            # print(door_list)
             for sublist in door_list:
-
+                if (sublist[0] in ext_boxes) or (sublist[1] in ext_boxes):
+                    continue
                 flat_list += [mapper[sublist[0]], mapper[sublist[1]]]
                 flat_list += [-1]
+
             flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
             length = len(flat_list)
 
-        # print(flat_list)
-        edg_seq = np.ones(self.edg_len) * -2
+        # print(flat_list, door_list, door_file)
 
-        # print(flat_list)
+        edg_seq = np.ones(self.edg_len) * -2
         edg_seq[:length] = np.array(flat_list) + 2
         edg_seq[edg_seq == -2] = 0
 
@@ -722,6 +728,9 @@ class RrplanDoors(Dataset):
         else:
             self.transforms = Identity()
 
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
 
     def __getitem__(self, idx):
         path = os.path.join(self.root_dir,
