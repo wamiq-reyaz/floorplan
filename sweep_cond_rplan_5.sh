@@ -17,4 +17,5 @@
 conda activate faclab
 
 #wandb agent wamreyaz/demo_conditional/ivu5j9qr
-wandb agent wamreyaz/demo_conditional/btzx2q3h # augmented
+#wandb agent wamreyaz/demo_conditional/btzx2q3h # augmented
+wandb agent wamreyaz/demo_conditional/srvpemjv # aug flip + rot

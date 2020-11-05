@@ -10,12 +10,12 @@ import pickle
 
 class Flip(object):
     def __init__(self,
-                 idx,
-                 len_sample,
-                 width,
+                 # idx,
+                 # len_sample,
+                 # width,
                  p=0.5):
-        self.idx = idx
-        self.len_sample = len_sample
+        # self.idx = idx
+        # self.len_sample = len_sample
         self.p = p
 
 
@@ -26,11 +26,10 @@ class Flip(object):
 
         return flipped
 
+
 class Rot90(object):
     def __init__(self,
-                 len_sample,
                  p=0.5):
-        self.len_sample = len_sample
         self.p = p
 
     def __call__(self, x):
