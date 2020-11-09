@@ -30,8 +30,8 @@ if __name__ == '__main__':
         vocab_size=65,
         n_positions=120,
         n_ctx=120,
-        n_embd=264,
-        n_layer=14,
+        n_embd=192,
+        n_layer=18,
         n_head=12,
         is_causal=True,
         is_encoder=False,
@@ -42,10 +42,9 @@ if __name__ == '__main__':
     model = model.cuda()
 
     model_dict = {}
-    ckpt = torch.load('/mnt/iscratch/floorplan/models/triples_xy/'
-                      'GraphGPTxy-22-Oct_17-59-bs144-lr7.736186230731716e-'
-                      '05-enl14-decl12-dim_embed264-17dede1d-3d71-4d98-ab08'
-                      '-ac665b0b6121/'
+    ckpt = torch.load('/mnt/iscratch/floorplan/models/triples_wh/'
+                      'GraphGPTxy-30-Oct_23-05-bs144-lr0.0007-enl18-'
+                      'decl12-dim_embed192-d67d0d17-c96c-4a2e-8b8b-5434dd820ec0/'
                       'triples_hw3_best.pth', map_location='cpu')
 
     try:
@@ -74,7 +73,7 @@ if __name__ == '__main__':
     bs = 20
     sample_idx = 1
     temperature = 0.9
-    for jj in tqdm(range(500)):
+    for jj in tqdm(range(30)):
         input_ids = torch.zeros(bs, dtype=torch.long).cuda().reshape(bs, 1)
         for ii in range(120):
             position_ids = torch.arange(ii + 1, dtype=torch.long).cuda().unsqueeze(0).repeat(bs, 1)
@@ -110,7 +109,8 @@ if __name__ == '__main__':
                 boxes = curr_sample[:stop_token_idx].reshape((-1, 3)) - 1
 
             curr_time = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-            file_name = '/home/parawr/Projects/floorplan/samples/v2_tuned_triples_0.9/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
+            os.makedirs('/home/parawr/Projects/floorplan/samples/triples_wh_0.9/', exist_ok=True)
+            file_name = '/home/parawr/Projects/floorplan/samples/triples_wh_0.9/' + curr_time + f'triples_39_temp_{temperature}_{sample_idx:04d}.npz'
             np.savez(file_name, boxes)
 
 

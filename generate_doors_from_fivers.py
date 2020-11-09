@@ -80,7 +80,9 @@ if __name__ == '__main__':
         n_layer=args.enc_layer,
         n_head=12,
         is_causal=False,
-        is_encoder=True
+        is_encoder=True,
+        pos_id=True,
+        n_types=3
     )
 
     dec = GPT2Config(

@@ -180,7 +180,7 @@ class CrossAttnBlock(nn.Module):
         self, enc, dec, self_attn_mask=None, cross_attn_mask=None
     ):
         """
-        :param enc: The encoder embeddings of shape (S, N, E) 
+        :param enc: The encoder embeddings of shape (S, N, E)
         :param dec: The decoder embeddings of shape (T, N, E)
         :param self_attn_mask: The decoder self attention mask of shape (N x T) for excluding padding
         :param cross_attn_mask: The decoder cross attention mask of shape (N, S) for excluding padding in encoder
@@ -344,7 +344,7 @@ class GPT2Model(nn.Module):
             # positions we want to attend and -10000.0 for masked positions.
             # Since we are adding it to the raw scores before the softmax, this is
             # effectively the same as removing these entirely.
-            attention_mask = attention_mask.to(dtype=inputs_embeds.dtype)  # fp16 compatibility
+            attention_mask = attention_mask.to(dtype=input_ids.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * -10000.0
 
         # Prepare head mask if needed
@@ -438,7 +438,11 @@ class GPT2Encoder(nn.Module):
         super().__init__()
         self.config = config
 
-        self.wte = nn.Embedding(config.vocab_size+2, config.n_embd)
+        if self.config.separate:
+            self.wte = nn.ModuleList([nn.Embedding(config.vocab_size+2, config.n_embd) for _ in
+                                     range(self.config.n_types)])
+        else:
+            self.wte = nn.Embedding(config.vocab_size+2, config.n_embd)
         self.drop = nn.Dropout(config.embd_pdrop)
         self.h = nn.ModuleList([Block(config.n_ctx, config, scale=True) for _ in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
@@ -594,26 +598,14 @@ class GPT2Encoder(nn.Module):
 
         # print('Before embeddings')
         if inputs_embeds is None:
-            if self.id_embed:
-                # print(input_ids.shape)
-                # print(input_ids[:, :, 0].shape)
+            if self.config.separate:
+                inputs_embeds = 0.
+                for ii, embedder in enumerate(self.wte):
+                    inputs_embeds += embedder(input_ids[:, :, ii].contiguous())
 
-                id_embeds = self.ide(input_ids[:, :, 0].contiguous())
-                # print(id_embeds)
-                inputs_embeds = self.wte(input_ids[:, :, 1:].contiguous())
-
-                # if input_ids.dim() == 3:
-                #     id_
-                # print(input_ids.shape)
-                # print(id_embeds.shape)
-                # print(inputs_embeds.shape)
             else:
                 id_embeds = 0
                 inputs_embeds = self.wte(input_ids)
-
-            # print('/INside encoder printing dim of inputs_embeds', inputs_embeds.dim())
-            if inputs_embeds.dim() == 4: # ie the verts are 2d
-                inputs_embeds = torch.sum(inputs_embeds, dim=-2) + id_embeds
 
         if token_type_ids is not None:
             token_type_embeds = self.wte(token_type_ids)

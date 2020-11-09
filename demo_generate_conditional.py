@@ -66,7 +66,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # BATCH_SIZE = args.bs
-    BATCH_SIZE = 10
+    BATCH_SIZE = 1
     val_set = RplanConditional(root_dir=args.input_dir,
                                split='test',
                                enc_len=args.enc_n,
@@ -131,14 +131,15 @@ if __name__ == '__main__':
     model.eval()
 
     for jj, data in tqdm(enumerate(dloader)):
-        if jj != 8:
+        if jj != 88:
             continue
-        enc_seq = data['enc_seq'].cuda()
-        enc_attn = data['enc_attn'].cuda()
-        enc_pos = data['enc_pos_id'].cuda()
+        bs = 10
+        enc_seq = data['enc_seq'].cuda().repeat((bs, 1))
+        enc_attn = data['enc_attn'].cuda().repeat((bs, 1))
+        enc_pos = data['enc_pos_id'].cuda().repeat((bs, 1))
 
 
-        bs = enc_seq.shape[0]
+        # bs = enc_seq.shape[0]
         input_ids = torch.zeros(args.dec_n, dtype=torch.long).to(device=device).unsqueeze(0).repeat(bs, 1)
         attn_mask = torch.zeros(args.dec_n, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
         for ii in range(args.dec_n - 1):
