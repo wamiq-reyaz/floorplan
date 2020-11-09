@@ -22,7 +22,6 @@ room_type_names = [
     'Bathroom',
     'Living Room',
     'Office',
-    'Garage',
     'Balcony',
     'Hallway',
     'Other Room']
