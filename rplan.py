@@ -281,10 +281,11 @@ class RplanConditionalDoors(Dataset):
                                  self.suffix + suffix)
 
         if not os.path.exists(door_file):
+            print(door_file)
+
             door_file = os.path.join(self.root_dir,
                                      self.file_names[0].strip('\n') + \
                                      self.suffix + suffix)
-            print(door_file)
 
         # create the vertex_data first
 
@@ -761,10 +762,10 @@ class RrplanDoors(Dataset):
                             self.suffix + suffix)
 
         if not os.path.exists(door_file):
+            print(door_file)
             door_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
                             self.suffix + suffix)
-            print(door_file)
 
         # create the vertex_data first
         with open(path, 'rb') as f:
@@ -877,10 +878,11 @@ class RrplanWalls(Dataset):
                             self.suffix + suffix)
 
         if not os.path.exists(door_file):
+            print(door_file)
+
             door_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
                             self.suffix + suffix)
-            print(door_file)
 
         # create the vertex_data first
         with open(path, 'rb') as f:

@@ -18,8 +18,8 @@ from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
 import argparse
-from utils import parse_wall_or_door_seq, parse_vert_seq,
-                  parse_edge_seq
+from utils import parse_wall_or_door_seq, parse_vert_seq, \
+                  parse_edge_seq, top_k_top_p_filtering
 
 
 
@@ -30,8 +30,9 @@ if __name__ == '__main__':
     parser.add_argument('--samples', default=None, type=str, help= 'The three tuple samples')
     parser = parser.parse_args()
 
+    print('ullalala')
 
-    BATCH_SIZE = 30
+    BATCH_SIZE = 2
     dset = RrplanNPZTriples(root_dir=f'/home/parawr/Projects/floorplan/samples/{parser.samples}',
                  seq_len=120,
                  edg_len=100,
@@ -47,7 +48,9 @@ if __name__ == '__main__':
         n_layer=12,
         n_head=12,
         is_causal=False,
-        is_encoder=True
+        is_encoder=True,
+        pos_id=True,
+        n_types=3
     )
 
     dec = GPT2Config(
@@ -69,7 +72,11 @@ if __name__ == '__main__':
         suffix = 'v'
     else:
         suffix = ''
-    ckpt = torch.load(f'/home/parawr/Projects/floorplan/models/face_model{suffix}_eps_m6_mlp_lr_m4/face_model{suffix}_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    # ckpt = torch.load(f'/home/parawr/Projects/floorplan/models/face_model{suffix}_eps_m6_mlp_lr_m4/face_model{suffix}_eps_m6_mlp_lr_m4_39.pth', map_location='cpu')
+    ckpt = torch.load(f'/mnt/iscratch/floorplan/models/_adj_v/GraphGPT-08-Nov_14-36--'
+                      f'--adj_v-bs96-lr0.00010-enl12-decl12-dim_embed264-9bc0b808-'
+                      f'8fdd-490f-bea3-74eb5a7793f0/'
+                      f'model_adj_v_best.pth', map_location='cpu')
 
     try:
         weights = ckpt.state_dict()
@@ -108,9 +115,14 @@ if __name__ == '__main__':
                              vert_attn_mask=vert_attn_mask
                              )
 
-                logits = loss[1][:, ii, :] / temperature
+                logits = top_k_top_p_filtering(loss[1][:, ii, :], top_p=0.9) / temperature
                 probs = torch.softmax(logits.squeeze(), dim=-1)
+                print(logits, probs)
+
                 next_token = torch.multinomial(probs, num_samples=1)
+
+                if ii == 4:
+                    sys.exit()
 
 
 
@@ -121,8 +133,19 @@ if __name__ == '__main__':
 
 
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:] # drop 0
-        # print(input_ids.shape)
+        print(input_ids.shape)
         samples = [input_ids[ii, :] for ii in range(bs)]
+        print(vert_seq[-1])
+        print(samples[-1] - 2)
+        print(parse_edge_seq(samples[-1]))
+
+        import networkx as nx
+        from networkx.drawing.nx_agraph import write_dot
+
+        graph = nx.DiGraph()
+        graph.add_edges_from(parse_edge_seq(samples[-1]))
+        write_dot(graph, 'vert.dot')
+        sys.exit()
 
         SAVE_DIR = os.path.join('samples', parser.samples, 'edges', f'{parser.kind}_{parser.temp:0.1f}')
         if not os.path.exists(SAVE_DIR):

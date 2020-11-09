@@ -18,13 +18,13 @@ from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
 
-from utils import parse_wall_or_door_seq, parse_vert_seq,
-                  parse_edge_seq
+from utils import parse_wall_or_door_seq, parse_vert_seq,\
+    parse_edge_seq
 
 
 if __name__ == '__main__':
     BATCH_SIZE = 30
-    dset = RrplanNPZTriples(root_dir='./samples/triples_0.8',
+    dset = RrplanNPZTriples(root_dir='./samples/triples_wh_0.9',
                  seq_len=120,
                  edg_len=100,
                  vocab_size=65)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
                          vert_attn_mask=vert_attn_mask
                          )
 
-            logits = loss[1][:, ii, :]
+            logits = loss[1][:, ii, :] / 0.9
             probs = torch.softmax(logits.squeeze(), dim=-1)
             next_token = torch.multinomial(probs, num_samples=1)
             # print('in generate probs, next_token', probs.shape, next_token.shape)
@@ -115,7 +115,7 @@ if __name__ == '__main__':
             base_name = os.path.basename(full_name)
             root_name = os.path.splitext(base_name)[0]
 
-            save_path = os.path.join('samples', 'triples_0.8', 'edges', 'v', root_name + '.pkl')
+            save_path = os.path.join('samples', 'aatriples_0.8', 'edges', 'v', root_name + '.pkl')
             with open(save_path, 'wb') as fd:
                 pickle.dump(parse_edge_seq(ss), fd, protocol=pickle.HIGHEST_PROTOCOL)
 

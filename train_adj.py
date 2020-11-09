@@ -1,4 +1,5 @@
 import warnings
+
 warnings.filterwarnings('ignore', category=FutureWarning)
 import os, sys
 import numpy as np
@@ -13,7 +14,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RrplanGraph, LIFULLGraph
+from rplan import RrplanGraph, Flip, Rot90, RrplanGraph, LIFULLGraph
 from gpt2 import GraphGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
@@ -24,7 +25,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'adj'
+PROJECT = 'adj_rplan_hw'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -32,33 +33,32 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
     parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
-    parser.add_argument('--edg_len', default=170, type=int, help='how long is the edge length or door length')
+    parser.add_argument('--edg_len', default=100, type=int, help='how long is the edge length or door length')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
     parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
     parser.add_argument('--adj', default='h', type=str, help='h/v/all doors')
     parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=170, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=100, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
 
-
     # optimizer
-    parser.add_argument('--step', default=15, type=int, help='how many epochs before reducing lr')
+    parser.add_argument('--step', default=30, type=int, help='how many epochs before reducing lr')
     parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
     parser.add_argument('--gamma', default=0.1, type=float, help='reduction in lr')
-    parser.add_argument('--bs', default=64, type=int, help='batch size')
+    parser.add_argument('--bs', default=96, type=int, help='batch size')
 
     # Data
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
     parser.add_argument('--lifull', default=False, type=bool)
+    parser.add_argument('--separate', default=False, type=bool)
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
     parser.add_argument("--tags", default='', type=str, help="Wandb tags")
 
     args = parser.parse_args()
-    args.adj = 'h'
 
     if on_local():
         args.root_dir = './'
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         if args.lifull:
             args.datapath = '/mnt/iscratch/datasets/lifull_ddg_var'
 
-    else: # assume IBEX
+    else:  # assume IBEX
         args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
         if args.lifull:
@@ -74,42 +74,38 @@ if __name__ == '__main__':
 
     if not args.lifull:
         dset = RrplanGraph(root_dir=args.datapath,
-                    split='train',
-                    seq_len=args.seq_len,
-                    edg_len=args.edg_len,
-                    vocab_size=args.vocab,
-                    edg_type=args.adj,
+                           split='train',
+                           seq_len=args.seq_len,
+                           edg_len=args.edg_len,
+                           vocab_size=args.vocab,
+                           edg_type=args.adj,
                            wh=True)
         val_set = RrplanGraph(root_dir=args.datapath,
-                    split='val',
-                    seq_len=args.seq_len,
-                    edg_len=args.edg_len,
-                    vocab_size=args.vocab,
-                    edg_type=args.adj,
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              edg_type=args.adj,
                               wh=True)
-    
+
     else:
         dset = LIFULLGraph(root_dir=args.datapath,
-                    split='train',
-                    seq_len=args.seq_len,
-                    edg_len=args.edg_len,
-                    vocab_size=args.vocab,
-                    edg_type=args.adj)
+                           split='train',
+                           seq_len=args.seq_len,
+                           edg_len=args.edg_len,
+                           vocab_size=args.vocab,
+                           edg_type=args.adj)
         val_set = LIFULLGraph(root_dir=args.datapath,
-                    split='val',
-                    seq_len=args.seq_len,
-                    edg_len=args.edg_len,
-                    vocab_size=args.vocab,
-                    edg_type=args.adj)
+                              split='val',
+                              seq_len=args.seq_len,
+                              edg_len=args.edg_len,
+                              vocab_size=args.vocab,
+                              edg_type=args.adj)
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
-    # for ii in tqdm(dloader):
-    #     pass
-    # for ii in tqdm(val_loader):
-    #     pass
-    # sys.exit()
+
     enc = GPT2Config(
         vocab_size=args.vocab,
         n_positions=args.enc_n,
@@ -118,7 +114,10 @@ if __name__ == '__main__':
         n_layer=args.enc_layer,
         n_head=12,
         is_causal=False,
-        is_encoder=True
+        is_encoder=True,
+        pos_id=True,
+        n_types=3,
+        separate=args.separate
     )
 
     dec = GPT2Config(
@@ -143,10 +142,11 @@ if __name__ == '__main__':
 
     # writer = SummaryWriter(comment='intial_door_model_5_tuple')\
 
-
-    run_id = "GraphGPT-{}----adj_{}-bs{}-lr{:0.5f}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'), args.adj,
-                                                                      args.bs, args.lr, args.enc_layer, args.dec_layer,
-                                                                      args.dim, uuid.uuid4())
+    run_id = "GraphGPT-{}----adj_{}-bs{}-lr{:0.5f}-enl{}-decl{}-dim_embed{}-{}".format(dt.now().strftime('%d-%h_%H-%M'),
+                                                                                       args.adj,
+                                                                                       args.bs, args.lr, args.enc_layer,
+                                                                                       args.dec_layer,
+                                                                                       args.dim, uuid.uuid4())
     wandb.init(project=PROJECT, name=run_id, config=args, dir=".", save_code=True, notes=args.notes)
     wandb.watch(model)
     global_steps = 1
@@ -166,7 +166,7 @@ if __name__ == '__main__':
         shutil.copy(code_file, code_dir)
 
     argsdict = vars(args)
-    args_file = SAVE_LOCATION  + 'args.json'
+    args_file = SAVE_LOCATION + 'args.json'
 
     with open(args_file, 'w') as fd:
         json.dump(argsdict, fd,
@@ -185,11 +185,11 @@ if __name__ == '__main__':
             vert_attn_mask = data['vert_attn_mask'].cuda()
             # print(vert_seq.shape)
 
-            loss = model( node=vert_seq,
-                          edg=edg_seq,
-                          attention_mask=attn_mask,
-                          labels=edg_seq,
-                          vert_attn_mask=vert_attn_mask)
+            loss = model(node=vert_seq,
+                         edg=edg_seq,
+                         attention_mask=attn_mask,
+                         labels=edg_seq,
+                         vert_attn_mask=vert_attn_mask)
 
             loss[0].mean().backward()
 
@@ -211,14 +211,13 @@ if __name__ == '__main__':
                 pos_id = data['pos_id'].cuda()
                 vert_attn_mask = data['vert_attn_mask'].cuda()
 
-                loss = model( node=vert_seq,
-                          edg=edg_seq,
-                          attention_mask=attn_mask,
-                          labels=edg_seq,
-                              vert_attn_mask=vert_attn_mask)
+                loss = model(node=vert_seq,
+                             edg=edg_seq,
+                             attention_mask=attn_mask,
+                             labels=edg_seq,
+                             vert_attn_mask=vert_attn_mask)
 
                 all_val_stats.append(loss[0].mean().item())
-
 
             total_nll = np.mean(np.asarray(all_val_stats))
             wandb.log({'loss/val': total_nll}, step=global_steps)
@@ -226,7 +225,7 @@ if __name__ == '__main__':
 
         if total_nll <= best_nll:
             best_nll = total_nll
-            torch.save(model.state_dict(), SAVE_LOCATION+  f'model_adj_{args.adj}_best.pth')
+            torch.save(model.state_dict(), SAVE_LOCATION + f'model_adj_{args.adj}_best.pth')
 
 
 

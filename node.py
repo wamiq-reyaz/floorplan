@@ -200,10 +200,10 @@ class Floor(object):
         patches = []
         annots = []
         for ii, rr in enumerate(self._rooms):
-            x = rr.getx() * 64
-            y = rr.gety() * 64
-            w = rr.get_width() * 64
-            h = rr.get_height() * 64
+            x = rr.getx() #* 64
+            y = rr.gety() #* 64
+            w = rr.get_width()# * 64
+            h = rr.get_height() #* 64
             coords = [[x, y],
                       [x+w, y],
                       [x+w, y+h],
@@ -317,6 +317,9 @@ class LPSolver(object):
     def solve(self, mode, iter=None):
         # self._model.setObjective(self.summer.T @ self.widths + self.summer.T @ self.heights, GRB.MINIMIZE)
         self._model.setObjective(self.bbox_width + self.bbox_height, GRB.MINIMIZE)
+        self._model.setParam(GRB.Param.Presolve, 0)
+        self._model.setParam(GRB.Param.Heuristics, 0)
+
 
         self._read_graph()
         if iter is not None:
@@ -367,8 +370,6 @@ class LPSolver(object):
         # constraints for the right/top
 
         for node in self._get_all_maximal(self._floor.horiz_constraints):
-            # print(self.xlocs[node])
-            # print(self.bbox_width)
             if self.lines_align:
                 if self.boxes_are_maximal:
                     self._model.addConstr(self.xlocs[node] + self.widths[node] == self.bbox_width[0],
