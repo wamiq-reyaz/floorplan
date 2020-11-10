@@ -18,16 +18,20 @@ def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list
     if box_dir is not None and box_dir.endswith('.hdf5'):
         # format 0:
         # three hdf5 files, one for boxes, one for door edges, one for wall edges
+
+        box_sample_names = []
         boxes_file = h5py.File(box_dir, 'r')
-        box_sample_names = set(boxes_file.keys())
+        boxes_file.visititems(lambda name, obj: box_sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
 
+        door_sample_names = []
         doors_file = h5py.File(door_dir, 'r')
-        door_sample_names = set(doors_file.keys())
+        doors_file.visititems(lambda name, obj: door_sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
 
+        wall_sample_names = []
         walls_file = h5py.File(wall_dir, 'r')
-        wall_sample_names = set(walls_file.keys())
+        walls_file.visititems(lambda name, obj: wall_sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
 
-        names = sorted(list(box_sample_names & door_sample_names & wall_sample_names))
+        names = sorted(list(set(box_sample_names) & set(door_sample_names) & set(wall_sample_names)))
 
     elif all(d is not None for d in [box_dir, door_dir, wall_dir]):
         # format 1:
@@ -61,6 +65,27 @@ def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list
                     names.append(os.path.join(relpath if relpath != '.' else '', filename[:-len('_xyhw.npy')]))
 
     return names
+
+def convert_boxes_to_hdf5(input_dir, output_path, append=False):
+
+    sample_names = []
+    for filename in os.listdir(input_dir):
+        if os.path.isfile(os.path.join(input_dir, filename)) and (filename.endswith('.npz') or filename.endswith('.npy')):
+            sample_names.append(os.path.join(filename[:-len('.npz')]))
+
+    boxes = []
+    for sample_name in sample_names:
+        if os.path.exists(os.path.join(input_dir, f'{sample_name}.npz')):
+            boxes.append(np.load(os.path.join(input_dir, f'{sample_name}.npz'))['arr_0'])
+        else:
+            boxes.append(np.load(os.path.join(input_dir, f'{sample_name}.npy')))
+
+        if boxes[-1].size == 0:
+            boxes[-1] = np.zeros([0, 5], dtype=np.int64)
+
+    boxes_file = h5py.File(output_path, 'r+' if append else 'w')
+    for i, sample_name in enumerate(sample_names):
+        boxes_file.create_dataset(sample_name, data=boxes[i])
 
 def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix=''):
 
@@ -344,13 +369,36 @@ def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_name
     return room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, sample_names
 
 if __name__ == '__main__':
-    # input_dir = '../../ddg/data/results/stylegan/rplan_var_002_stylegan_baseline'
-    # output_basepath = '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan'
+    # # input_dir = '../../ddg/data/results/stylegan/rplan_var_002_stylegan_baseline'
+    # # output_basepath = '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan'
 
-    input_dir = '../../ddg/data/results/stylegan/lifull_var_002_stylegan_baseline'
-    output_basepath = '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull'
+    # input_dir = '../../ddg/data/results/stylegan/lifull_var_002_stylegan_baseline'
+    # output_basepath = '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull'
 
-    room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, sample_names = load_rooms(base_dir=input_dir)
-    save_rooms(
-        base_path=output_basepath, sample_names=sample_names,
-        room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps)
+    # room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, sample_names = load_rooms(base_dir=input_dir)
+    # save_rooms(
+    #     base_path=output_basepath, sample_names=sample_names,
+    #     room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps)
+
+    
+    # convert boxes
+    # convert_boxes_to_hdf5(
+    #     input_dir='../data/results/3_tuple_on_rplan/temp_0.9_old/nodes_0.9_0.9',
+    #     output_path='../data/results/3_tuple_on_rplan/temp_0.9_0.9/nodes_0.9_0.9.hdf5')
+
+    
+    # fix door and edge sample names in the hdf5 files
+    # filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/doors_0.9.hdf5'
+    filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5'
+    with h5py.File(filename, 'r') as h5file:
+        sample_names = []
+        h5file.visititems(lambda name, obj: sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
+        samples = []
+        for sample_name in sample_names:
+            samples.append(np.array(h5file[sample_name]))
+    
+    sample_names = [os.path.basename(name) for name in sample_names]
+    
+    with h5py.File(filename, 'w') as h5file:
+        for i, sample_name in enumerate(sample_names):
+            h5file.create_dataset(sample_name, data=samples[i])

@@ -1,3 +1,4 @@
+import math
 from itertools import chain
 import numpy as np
 import networkx as nx
@@ -206,23 +207,12 @@ if __name__ == '__main__':
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_0.9.txt', 'output_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9'},
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt', 'output_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0'},
         
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_0.9_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_1.0'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9/test_doors_1.0_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_0.9_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_1.0'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_1.0/test_doors_1.0_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_1.0'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_0.9_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_1.0'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_0.9'},
-        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0', 'door_dir': '../data/results/3_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_1.0/walls_1.0', 'sample_list': '../data/results/3_tuple_on_rplan/temp_1.0/nodes_1.0_1.0/test_doors_1.0_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_1.0'},
+        {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/nodes_0.9_0.9.hdf5', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/doors_0.9.hdf5', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9'},
 
         # {'box_dir': '../data/results/rplan_on_rplan', 'sample_list': '../data/results/rplan_on_rplan/all.txt', 'output_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan'},
         # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'output_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'},
         
-        {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'output_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan'},
+        # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'output_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan'},
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'output_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull'},
     ]
 
@@ -244,37 +234,24 @@ if __name__ == '__main__':
 
         batch_count = 0
         batch_size = 100
+        batch_count = math.ceil(len(sample_names) / batch_size)
         batch_sample_names, batch_room_types, batch_room_bboxes, batch_room_door_edges, batch_room_door_regions, batch_room_idx_maps = [], [], [], [], [], []
-        for sample_name in tqdm(sample_names):
-            boxes, door_edges, wall_edges, sample_names = load_boxes(sample_names=[sample_name], box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
+        for batch_idx in tqdm(range(batch_count)):
+
+            samples_from = batch_size*batch_idx
+            samples_to = min(batch_size*(batch_idx+1), len(sample_names))
+            batch_sample_names = sample_names[samples_from:samples_to]
+            
+            boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
 
             room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps = convert_boxes_to_rooms(
                 boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=len(room_type_names))
 
-            batch_sample_names.append(sample_name)
-            batch_room_types.extend(room_types)
-            batch_room_bboxes.extend(room_bboxes)
-            batch_room_door_edges.extend(room_door_edges)
-            batch_room_door_regions.extend(room_door_regions)
-            batch_room_idx_maps.extend(room_idx_maps)
-
-            if len(batch_room_types) >= batch_size:
-                save_rooms(
-                    base_path=output_basepath, sample_names=batch_sample_names,
-                    room_types=batch_room_types,
-                    room_bboxes=batch_room_bboxes,
-                    room_door_edges=batch_room_door_edges,
-                    room_door_regions=batch_room_door_regions,
-                    room_idx_maps=batch_room_idx_maps,
-                    append=batch_count > 0)
-                batch_sample_names, batch_room_types, batch_room_bboxes, batch_room_door_edges, batch_room_door_regions, batch_room_idx_maps = [], [], [], [], [], []
-                batch_count += 1
-                
-        save_rooms(
-            base_path=output_basepath, sample_names=batch_sample_names,
-            room_types=batch_room_types,
-            room_bboxes=batch_room_bboxes,
-            room_door_edges=batch_room_door_edges,
-            room_door_regions=batch_room_door_regions,
-            room_idx_maps=batch_room_idx_maps,
-            append=batch_count > 0)
+            save_rooms(
+                base_path=output_basepath, sample_names=batch_sample_names,
+                room_types=room_types,
+                room_bboxes=room_bboxes,
+                room_door_edges=room_door_edges,
+                room_door_regions=room_door_regions,
+                room_idx_maps=room_idx_maps,
+                append=batch_idx > 0)
