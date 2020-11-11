@@ -20,8 +20,8 @@ class Flip(object):
 
 
     def __call__(self, x):
+        flipped = x.copy()
         if torch.rand(1) < self.p:
-            flipped = x.copy()
             flipped[:, 1] = 64 - x[:, 1]
 
         return flipped
@@ -33,8 +33,8 @@ class Rot90(object):
         self.p = p
 
     def __call__(self, x):
+        rotted = x.copy()
         if torch.rand(1) < self.p:
-            rotted = x.copy()
             rotted[:, [1, 2]] = rotted[:, [2, 1]]
             if rotted.shape[-1] == 5:
                 rotted[:, [3,4 ]] = rotted[:, [4, 3]]
@@ -212,16 +212,118 @@ class RplanConditional(Dataset):
         return len(self.file_names)
 
 
+class LIFULLConditional(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False):
+        super().__init__()
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.enc_len = enc_len
+        self.dec_len = dec_len
+        self.vocab_size = vocab_size
+        self.drop_dim = drop_dim
+        self.wh = wh
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            '_xyhw.npy')
+
+        zero_token = np.array(0, dtype=np.uint8)
+        stop_token = np.array([self.vocab_size+1], dtype=np.uint8)
+
+        enc_seq = np.ones(self.enc_len, dtype=np.uint8) * self.vocab_size
+        dec_seq = np.ones(self.dec_len, dtype=np.uint8) * self.vocab_size
+
+
+        enc_attn = np.ones(self.enc_len)
+        dec_attn = np.ones(self.dec_len)
+
+        enc_pos_id = np.arange(self.enc_len, dtype=np.uint8)
+        dec_pos_id = np.arange(self.dec_len, dtype=np.uint8)
+
+        enc_temp = []
+        dec_temp = []
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            if self.drop_dim:
+                if self.wh:
+                    tokens = self.transforms(tokens[:, [0, 3, 4]])
+                else:
+                    tokens = self.transforms(tokens[:, :3])
+
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1: # idx has been added by one
+                    enc_temp.append(curr_node)
+                else:
+                    dec_temp.append(curr_node)
+
+        enc_tokens = np.hstack(
+                            (zero_token,
+                             np.asarray(enc_temp).ravel(),
+                             stop_token)
+        )
+        dec_tokens = np.hstack(
+                            (zero_token,
+                             np.asarray(dec_temp).ravel(),
+                             stop_token)
+        )
+
+        elength = len(enc_tokens)
+        dlength = len(dec_tokens)
+
+        enc_seq[:elength] = enc_tokens
+        dec_seq[:dlength] = dec_tokens
+
+        enc_attn[elength+1:] = 0.0
+        dec_attn[dlength+1:] = 0.0
+
+        return {'enc_seq': torch.tensor(enc_seq).long(),
+                'dec_seq': torch.tensor(dec_seq).long(),
+                'enc_attn': torch.tensor(enc_attn),
+                'dec_attn': torch.tensor(dec_attn),
+                'enc_pos_id': torch.tensor(enc_pos_id).long(),
+                'dec_pos_id': torch.tensor(dec_pos_id).long()}
+
+
+    def __len__(self):
+        return len(self.file_names)
+
 class RplanConditionalDoors(Dataset):
     def __init__(self, root_dir, split=None,
                  pad_start=True, pad_end=True,
-                 seq_len=200,
+                 enc_len=200,
+                 dec_len=100,
                  vocab_size=65,
-                 edg_len=100,
+                 drop_dim=False,
                  transforms=None,
-                 dims=5,
+                 wh=False,
                  doors='all',
-                 lifull=False):
+                 lifull=False,
+                 ver2=False):
         super().__init__()
 
         self.root_dir = root_dir
@@ -230,14 +332,14 @@ class RplanConditionalDoors(Dataset):
 
         self.pad_start = pad_start
         self.pad_end = pad_end
-        self.seq_len = seq_len
+        self.seq_len = enc_len
         self.vocab_size = vocab_size
-        self.edg_len = edg_len
-        if dims not in [3, 5]:
-            raise ValueError('Dims can only be 3 or 5')
-        self.dims = dims
+        self.edg_len = dec_len
+        self.dims = 3 if drop_dim else 5
         self.doors = doors
+        self.wh = wh
         self.lifull = lifull
+        self.ver2 = ver2
 
         if self.lifull:
             self.suffix = ''
@@ -256,11 +358,11 @@ class RplanConditionalDoors(Dataset):
     def __getitem__(self, idx):
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                            self.suffix + '_xyhw.npy')
         if not os.path.exists(path):
             path = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
-                            '_image_nodoor_xyhw.npy')
+                            self.suffix + '_xyhw.npy')
 
         if self.doors == 'all':
             suffix = '_doorlist_all.pkl'
@@ -273,6 +375,9 @@ class RplanConditionalDoors(Dataset):
 
         else:
             raise ValueError('The door type is invalid')
+
+        if self.ver2:
+            suffix = '_doorlist_all2.pkl'
 
 
 
@@ -308,7 +413,7 @@ class RplanConditionalDoors(Dataset):
                     num_interior += 1
                     int_boxes.append(idx)
 
-        tokens = tokens[int_boxes, :]
+        tokens = tokens[int_boxes, :self.dims]
         length = len(tokens)
 
         # print(ext_boxess, int_boxes)
@@ -330,10 +435,9 @@ class RplanConditionalDoors(Dataset):
                 flat_list += [mapper[sublist[0]], mapper[sublist[1]]]
                 flat_list += [-1]
 
+
             flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
             length = len(flat_list)
-
-        # print(flat_list, door_list, door_file)
 
         edg_seq = np.ones(self.edg_len) * -2
         edg_seq[:length] = np.array(flat_list) + 2
@@ -354,6 +458,414 @@ class RplanConditionalDoors(Dataset):
     def __len__(self):
         return len(self.file_names)
 
+class RplanConditionalWalls(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False,
+                 doors='all',
+                 lifull=False):
+        super().__init__()
+
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split+'.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = enc_len
+        self.vocab_size = vocab_size
+        self.edg_len = dec_len
+        self.dims = 3 if drop_dim else 5
+        self.doors = doors
+        self.wh = wh
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') +\
+                            self.suffix + '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                            self.file_names[0].strip('\n') +\
+                            self.suffix + '_xyhw.npy')
+
+        if self.doors == 'all':
+            suffix = 'walllist_all.pkl'
+
+        elif self.doors == 'vert':
+            suffix = 'walllist_v.pkl'
+
+        elif self.doors == 'horiz':
+            suffix = 'walllist_h.pkl'
+
+        else:
+            raise ValueError('The door type is invalid')
+
+
+        door_file = os.path.join(self.root_dir,
+                                 self.file_names[idx].strip('\n') + \
+                                 self.suffix + suffix)
+
+        if not os.path.exists(door_file):
+            print(door_file)
+
+            door_file = os.path.join(self.root_dir,
+                                     self.file_names[0].strip('\n') + \
+                                     self.suffix + suffix)
+
+        # create the vertex_data first
+
+        ext_boxes = []
+        int_boxes = []
+        num_interior = 0
+        mapper = dict()
+
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1: # idx has been added by one
+                    ext_boxes.append(idx)
+                else:
+                    mapper[idx] = num_interior
+                    num_interior += 1
+                    int_boxes.append(idx)
+
+        tokens = tokens[int_boxes, :self.dims]
+        length = len(tokens)
+
+        # print(ext_boxess, int_boxes)
+
+        vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0,) * self.dims
+        vert_seq[2:length+2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length+2] = 1
+
+        # create the door data
+        flat_list = []
+        with open(door_file, 'rb') as f:
+            door_list = pickle.load(f)
+            for sublist in door_list:
+                if (sublist[0] in ext_boxes) or (sublist[1] in ext_boxes):
+                    continue
+                flat_list += [mapper[sublist[0]], mapper[sublist[1]]]
+                flat_list += [-1]
+
+
+            flat_list = [-2] + flat_list + [-2] # -2 at beginning and end
+            length = len(flat_list)
+
+        edg_seq = np.ones(self.edg_len) * -2
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+
+    def __len__(self):
+        return len(self.file_names)
+
+class RplanConditionalGraph(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False,
+                 doors='all',
+                 lifull=False):
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split + '.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = enc_len
+        self.vocab_size = vocab_size
+        self.edg_len = dec_len
+        self.dims = 3 if drop_dim else 5
+        self.doors = doors
+        self.wh = wh
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') + \
+                            self.suffix + '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                                self.file_names[0].strip('\n') + \
+                                self.suffix + '_xyhw.npy')
+
+        if self.lifull:
+            suffix = f'_edgelist_{self.doors}.pkl'
+        else:
+            suffix = f'_edge_dict_{self.doors}.pkl'
+
+        door_file = os.path.join(self.root_dir,
+                                 self.file_names[idx].strip('\n') + \
+                                 self.suffix + suffix)
+
+        if not os.path.exists(door_file):
+            print(door_file)
+
+            door_file = os.path.join(self.root_dir,
+                                     self.file_names[0].strip('\n') + \
+                                     self.suffix + suffix)
+
+        # create the vertex_data first
+
+        ext_boxes = []
+        int_boxes = []
+        num_interior = 0
+        mapper = dict()
+
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1:  # idx has been added by one
+                    ext_boxes.append(idx)
+                else:
+                    mapper[idx] = num_interior
+                    num_interior += 1
+                    int_boxes.append(idx)
+
+        tokens = tokens[int_boxes, :self.dims]
+        length = len(tokens)
+
+        # print(ext_boxess, int_boxes)
+
+        vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0,) * self.dims
+        vert_seq[2:length + 2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length + 2] = 1
+
+        # create the door data
+        flat_list = []
+        with open(door_file, 'rb') as f:
+            door_list = pickle.load(f)
+
+            for node, sublist in door_list.items():
+                if node in ext_boxes:
+                    continue
+                mapped = []
+                for elem in sublist:
+                    if elem in ext_boxes:
+                        continue
+                    else:
+                        mapped.append(mapper[elem])
+
+                # print(node, mapped, sublist, mapper)
+                flat_list += mapped
+                flat_list += [-1]
+
+            # print(flat_list, int_boxes, mapper)
+
+            flat_list = [-2] + flat_list + [-2]  # -2 at beginning and end
+            length = len(flat_list)
+
+        edg_seq = np.ones(self.edg_len) * -2
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+    def __len__(self):
+        return len(self.file_names)
+
+class LIFULLConditionalGraph(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False,
+                 doors='all',
+                 lifull=True):
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split + '.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.seq_len = enc_len
+        self.vocab_size = vocab_size
+        self.edg_len = dec_len
+        self.dims = 3 if drop_dim else 5
+        self.doors = doors
+        self.wh = wh
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+        else:
+            self.suffix = '_image_nodoor'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') + \
+                            self.suffix + '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                                self.file_names[0].strip('\n') + \
+                                self.suffix + '_xyhw.npy')
+
+        if self.lifull:
+            suffix = f'_edgelist_{self.doors}.pkl'
+        else:
+            suffix = f'_edge_dict_{self.doors}.pkl'
+
+        door_file = os.path.join(self.root_dir,
+                                 self.file_names[idx].strip('\n') + \
+                                 self.suffix + suffix)
+
+        if not os.path.exists(door_file):
+            print(door_file)
+
+            door_file = os.path.join(self.root_dir,
+                                     self.file_names[0].strip('\n') + \
+                                     self.suffix + suffix)
+
+        # create the vertex_data first
+
+        ext_boxes = []
+        int_boxes = []
+        num_interior = 0
+        mapper = dict()
+
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            n_nodes = tokens.shape[0]
+            for idx in range(n_nodes):
+                curr_node = tokens[idx, :]
+                if curr_node[0] == 1:  # idx has been added by one
+                    ext_boxes.append(idx)
+                else:
+                    mapper[idx] = num_interior
+                    num_interior += 1
+                    int_boxes.append(idx)
+
+        tokens = tokens[int_boxes, :self.dims]
+        length = len(tokens)
+
+        # print(ext_boxess, int_boxes)
+
+        vert_seq = np.ones((self.seq_len, self.dims), dtype=np.uint8) * (self.vocab_size + 1)
+        vert_seq[0, :] = (0,) * self.dims
+        vert_seq[2:length + 2, :] = tokens
+
+        vert_attn_mask = np.zeros(self.seq_len)
+        vert_attn_mask[:length + 2] = 1
+
+        # create the door data
+        flat_list = []
+        with open(door_file, 'rb') as f:
+            door_list = pickle.load(f)
+            for ss in door_list:
+                sublist = list(ss)
+                if (sublist[0] in ext_boxes) or (sublist[1] in ext_boxes):
+                    continue
+                flat_list += [mapper[sublist[0]], mapper[sublist[1]]]
+                flat_list += [-1]
+
+            # print(mapper, flat_list, int_boxes)
+            flat_list = [-2] + flat_list + [-2]  # -2 at beginning and end
+            length = len(flat_list)
+
+        edg_seq = np.ones(self.edg_len) * -2
+        edg_seq[:length] = np.array(flat_list) + 2
+        edg_seq[edg_seq == -2] = 0
+
+        attn_mask = np.zeros(self.edg_len)
+        attn_mask[:length] = 1
+
+        pos_id = torch.arange(self.edg_len)
+
+        return {'vert_seq': torch.tensor(vert_seq).long(),
+                'edg_seq': torch.tensor(edg_seq).long(),
+                'attn_mask': torch.tensor(attn_mask),
+                'pos_id': pos_id.long(),
+                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+
+    def __len__(self):
+        return len(self.file_names)
 
 class LIFULL(Dataset):
     def __init__(self, root_dir, split=None,
@@ -973,6 +1485,14 @@ if __name__ == '__main__':
     #
     # print(dset_doors_v.file_names[46545])
 
-    dset = RplanConditional(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
+    # dset = RplanConditional(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train')
+    # aa = dset[0]
+    # print(aa)
+
+    # dset = RplanConditionalGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='v')
+    # aa = dset[0]
+    # print(dset.file_names[0])
+
+    dset = LIFULLConditionalGraph(root_dir='/mnt/iscratch/datasets/lifull_ddg_var', split='train', doors='v')
     aa = dset[0]
-    print(aa)
+    print(dset.file_names[0])
