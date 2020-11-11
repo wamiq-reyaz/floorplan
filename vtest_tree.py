@@ -64,28 +64,35 @@ if __name__ == '__main__':
     # sys.exit()
 
 
-    IMG_PATH = f'/mnt/iscratch/datasets/lifull_ddg_var/00/4c/9a1eb46e36a83c365331a05143eb/'
-    # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/143/"
+    # IMG_PATH = f'/mnt/iscratch/datasets/lifull_ddg_var/00/4c/9a1eb46e36a83c365331a05143eb/'
+    # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/292/74931_0"/mnt/iscratch/datasets/lifull_ddg_var/09/34/9d192877f550aeb9280c55b30f81/0001_
+    IMG_PATH = "/mnt/iscratch/datasets/lifull_ddg_var/09/34/9d192877f550aeb9280c55b30f81/0001"
 
+    #
     # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/143/36861_0_image_nodoor.png"
     # #This one has stggered
     # IMAGES =   "/mnt/iscratch/datasets/rplan_ddg_var/114/29307_0_image_nodoor.png"
     aa = glob(IMG_PATH + '*')
-    print(aa)
-    IMAGES = natsorted(glob(IMG_PATH + '*_nodoor.png'))
-    DOOR_IMAGES = natsorted(glob(IMG_PATH + '*_image.png'))
-    print(len(IMAGES))
 
 
-    img_pil = Image.open(IMAGES[0])
+    IMAGES = IMG_PATH + '_image_nodoor.png'
+    DOOR_IMAGES = IMG_PATH + '_image.png'
+    # print(len(IMAGES))
+    # for ii, names in enumerate(IMAGES):
+    #     if '59825' in names:
+    #         print(ii, names)
+
+    # print(IMAGES[66])
+    img_pil = Image.open(IMAGES)
     img_np = np.asarray(img_pil)
     img_idx = make_rgb_indices(img_np, rplan_map)
 
-    door_pil = Image.open(DOOR_IMAGES[0])
+    # print(DOOR_IMAGES[66])
+    door_pil = Image.open(DOOR_IMAGES)
     door_np = np.asarray(door_pil)
     door_idx = make_door_indices(door_np)
     plt.imshow(door_idx)
-    plt.show()
+    plt.show(False)
     print(door_idx.shape, np.unique(door_idx))
     # print(door_idx)
 
@@ -120,7 +127,7 @@ if __name__ == '__main__':
     st._merge_vert_boxes(cross_wall=False)
     f, ax = st.show_boxes('merged')
     # plt.savefig(f'{idx}_no_cross_wall.png', dpi=160)
-    plt.show()
+    plt.show(False)
     import networkx as nx
 
 
@@ -136,7 +143,12 @@ if __name__ == '__main__':
     # plt.savefig(f'{idx}_cross_wall.png', dpi=160)
 
     # plt.show(block=True)
+    aa = st.find_horiz_door()
+    bb = st.find_vert_door()
 
+
+    print(aa.edges())
+    print(bb.edges())
 
     horiz_adj = st.find_horiz_adj()
     vert_adj = st.find_vert_adj()
@@ -146,12 +158,7 @@ if __name__ == '__main__':
     plt.show()
 
 
-    aa = st.find_vert_wall()
-    bb = st.find_horiz_wall()
 
-
-    print(aa.edges())
-    print(bb.edges())
 
 
     from node import Node, Floor, LPSolver

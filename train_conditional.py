@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--pos_id', default=True, type=bool, help='Whether to use pos_id in encoder')
     parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
     parser.add_argument('--passthrough', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
-    parser.add_argument('--wh', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--wh', default=False, type=int, help='Whether to have transformer layers in encoder')
     parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
 
@@ -81,13 +81,9 @@ if __name__ == '__main__':
                      drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
                      wh=args.wh,
-<<<<<<< HEAD
                      transforms=Compose([Rot90(),
                                         Flip()])
                                 )
-=======
-                     transforms=Compose(Rot90()))
->>>>>>> refs/remotes/origin/main
         val_set = RplanConditional(root_dir=args.datapath,
                               split='val',
                               enc_len=args.enc_n,

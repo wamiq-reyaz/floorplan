@@ -701,7 +701,8 @@ class RrplanDoors(Dataset):
                  transforms=None,
                  dims=5,
                  doors='all',
-                 lifull=False):
+                 lifull=False,
+                 ver2=False):
         # TODO: implement dims and doors strategy
         super().__init__()
         self.root_dir = root_dir
@@ -718,7 +719,7 @@ class RrplanDoors(Dataset):
         self.dims = dims
         self.doors = doors
         self.lifull = lifull
-
+        self.ver2 = ver2
         if self.lifull:
             self.suffix = ''
         else:
@@ -735,6 +736,9 @@ class RrplanDoors(Dataset):
         return cls.__init(*args, **kwargs)
 
     def __getitem__(self, idx):
+        nodes_exist = True
+        doors_exist = True
+        name = self.file_names[idx].strip('\n')
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
                             self.suffix + '_xyhw.npy')
@@ -742,8 +746,8 @@ class RrplanDoors(Dataset):
             path = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
                              self.suffix + '_xyhw.npy')
-            print(path)
 
+            nodes_exist = False
 
         if self.doors == 'all':
             suffix = '_doorlist_all.pkl'
@@ -757,12 +761,16 @@ class RrplanDoors(Dataset):
         else:
             raise ValueError('The door type is invalid')
 
+        if self.ver2:
+            suffix = '_doorlist_all2.pkl'
+
+
         door_file = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
                             self.suffix + suffix)
 
         if not os.path.exists(door_file):
-            print(door_file)
+            doors_exist = False
             door_file = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
                             self.suffix + suffix)
@@ -808,7 +816,11 @@ class RrplanDoors(Dataset):
                 'edg_seq': torch.tensor(edg_seq).long(),
                 'attn_mask': torch.tensor(attn_mask),
                 'pos_id': pos_id.long(),
-                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+                'vert_attn_mask': torch.tensor(vert_attn_mask),
+                'doors_exist': doors_exist,
+                'nodes_exist': nodes_exist,
+                'name': name,
+                'flat_list':len(flat_list)}
 
     def __len__(self):
         return len(self.file_names)
@@ -852,6 +864,8 @@ class RrplanWalls(Dataset):
 
 
     def __getitem__(self, idx):
+        name = self.file_names[idx].strip('\n')
+
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
                             self.suffix + '_xyhw.npy')
@@ -925,7 +939,9 @@ class RrplanWalls(Dataset):
                 'edg_seq': torch.tensor(edg_seq).long(),
                 'attn_mask': torch.tensor(attn_mask),
                 'pos_id': pos_id.long(),
-                'vert_attn_mask': torch.tensor(vert_attn_mask)}
+                'vert_attn_mask': torch.tensor(vert_attn_mask),
+                'name': name,
+                'flat_list': length}
 
     def __len__(self):
         return len(self.file_names)
