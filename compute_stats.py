@@ -704,7 +704,7 @@ def compute_egraph_set_stats(out_filename, room_basepath, label_count, exterior_
         samples_to = min(batch_size*(batch_idx+1), len(sample_names))
         batch_sample_names = sample_names[samples_from:samples_to]
 
-        room_types, room_bboxes, room_door_edges, _, _ = load_rooms(
+        room_types, room_bboxes, room_door_edges, _, _, _ = load_rooms(
             base_path=room_basepath, sample_names=batch_sample_names)
 
         stats = egraph_stats(
@@ -783,63 +783,42 @@ if __name__ == '__main__':
 
     from convert_boxes_to_rooms import room_type_names
 
-    label_names = [
-        'Exterior',
-        'Wall',
-        'Kitchen',
-        'Bedroom',
-        'Bathroom',
-        'Living Room',
-        'Office',
-        'Garage',
-        'Balcony',
-        'Hallway',
-        'Other Room']
-
-    exterior_type = label_names.index('Exterior')
-    exclude_types = [label_names.index('Wall')]
+    exterior_type = room_type_names.index('Exterior')
+    exclude_types = [room_type_names.index('Wall')]
     compute_stats = True
     compute_stat_distances = True
 
     if compute_stats:
 
         result_sets = [
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
             {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
-            {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+            # {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            # {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
 
-            {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
-            {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
+            # {'room_basepath': '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan', 'out_filename': '../data/results/stylegan_on_rplan_stats/stats.npy'},
+            # {'room_basepath': '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull', 'out_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
+
+            # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
+            # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
@@ -856,39 +835,31 @@ if __name__ == '__main__':
     if compute_stat_distances:
 
         stat_dist_sets = [
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
 
             {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_1.0_doors_1.0_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_0.9_walls_1.0/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_0.9/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_1.0_1.0_doors_1.0_walls_1.0/stats.npy'},
 
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
+
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/stylegan_on_rplan_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, stat_dist_set in enumerate(stat_dist_sets):
@@ -899,4 +870,4 @@ if __name__ == '__main__':
             print(f'stat distance set [{rsi+1}/{len(stat_dist_sets)}]: {out_dirname}')
 
             compute_egraph_set_stat_dists(
-                out_dirname=out_dirname, real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename, vis=True, label_names=label_names)
+                out_dirname=out_dirname, real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename, vis=True, label_names=room_type_names)

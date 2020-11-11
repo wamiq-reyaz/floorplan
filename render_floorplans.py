@@ -116,24 +116,16 @@ if __name__ == '__main__':
         # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9', 'output_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_vis/temp_1.0_doors_1.0_walls_0.9'},
         # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0', 'output_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_vis/temp_1.0_doors_1.0_walls_1.0'},
 
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_1.0'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_1.0_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_1.0_walls_1.0'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_0.9_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_0.9_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_0.9_walls_1.0'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_1.0_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_1.0_doors_1.0_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_1.0_doors_1.0_walls_1.0'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_0.9_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_0.9_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_0.9_walls_1.0'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_1.0_walls_0.9'},
-        # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_1.0_1.0_doors_1.0_walls_1.0', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_1.0_1.0_doors_1.0_walls_1.0'},
+        {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_0.9'},
 
-        {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'output_dir': '../data/results/rplan_on_rplan_vis'},
-        {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'output_dir': '../data/results/rplan_on_lifull_vis'},
+        # {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'output_dir': '../data/results/rplan_on_rplan_vis'},
+        # {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'output_dir': '../data/results/rplan_on_lifull_vis'},
         
-        {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'output_dir': '../data/results/gt_on_lifull_vis'},
-        {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'output_dir': '../data/results/gt_on_rplan_vis'},
+        # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'output_dir': '../data/results/gt_on_rplan_vis'},
+        # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'output_dir': '../data/results/gt_on_lifull_vis'},
+
+        # {'room_basepath': '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan', 'output_dir': '../data/results/stylegan_on_rplan_vis'},
+        # {'room_basepath': '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull', 'output_dir': '../data/results/stylegan_on_lifull_vis'},
     ]
     
     for rsi, result_set in enumerate(result_sets):
@@ -155,7 +147,7 @@ if __name__ == '__main__':
             samples_to = min(batch_size*(batch_idx+1), len(sample_names))
             batch_sample_names = sample_names[samples_from:samples_to]
 
-            room_types, _, room_door_edges, _, room_idx_maps = load_rooms(
+            room_types, _, room_door_edges, _, room_idx_maps, _ = load_rooms(
                 base_path=room_basepath, sample_names=batch_sample_names)
 
             images = render_floorplans(
