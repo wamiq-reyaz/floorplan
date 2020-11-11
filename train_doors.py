@@ -24,7 +24,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'rplan_doors_cond'
+PROJECT = 'LIFULL_doors'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
