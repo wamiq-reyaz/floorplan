@@ -35,7 +35,9 @@ def main():
     stats.vadj = []
 
     # IMG_PATH = f'/home/parawr/Projects/floorplan/rplan_var_images_doors/'
-    IMG_PATH = f'/home/parawr/Projects/floorplan/lifull_var_images_doors/'
+    # IMG_PATH = f'/home/parawr/Projects/floorplan/lifull_var_images_doors/'
+    IMG_PATH = f'/mnt/iscratch/datasets/rplan_var_images/'
+
 
     FILES = IMG_PATH + 'all.txt'
     DOOR_COLOR = (228, 26, 28)
@@ -81,41 +83,43 @@ def main():
             st._merge_vert_boxes(cross_wall=False)
 
 
-            horiz_adj = st.find_horiz_adj()
-            vert_adj = st.find_vert_adj()
-
-            horiz_wall = st.find_horiz_wall()
-            vert_wall = st.find_vert_wall()
+            # horiz_adj = st.find_horiz_adj()
+            # vert_adj = st.find_vert_adj()
+            #
+            # horiz_wall = st.find_horiz_wall()
+            # vert_wall = st.find_vert_wall()
 
             horiz_door = st.find_horiz_door()
             vert_door = st.find_vert_door()
+
+            print(horiz_door, vert_door)
 
         except Exception as e:
             print(idx, img_name)
             continue
 
-        num_rooms = len(st.boxes)
-
-        data_array = np.zeros((num_rooms, 5), np.uint8)
-        for ii, rr in enumerate(st.boxes):
-            data_array[ii, :] = (rr.idx, rr.xmin, rr.ymin, rr.get_width(), rr.get_height())
-
-        with open(img_name + '_xyhw.npy', 'wb') as fd:
-            np.save(fd, data_array)
-
-        with open(img_name + '_edgelist_h.pkl', 'wb') as fd:
-            pickle.dump(horiz_adj.edges(), fd, protocol=pickle.HIGHEST_PROTOCOL)
-
-        with open(img_name + '_edgelist_v.pkl', 'wb') as fd:
-            pickle.dump(vert_adj.edges(), fd, protocol=pickle.HIGHEST_PROTOCOL)
-
-        with open(img_name + '_doorlist_all.pkl', 'wb') as fd:
-            all_doors = list(horiz_door.edges()) + list(vert_door.edges())
-            pickle.dump(all_doors, fd, protocol=pickle.HIGHEST_PROTOCOL)
-
-        with open(img_name + 'walllist_all.pkl', 'wb') as fd:
-            all_walls = list(horiz_wall.edges()) + list(vert_wall.edges())
-            pickle.dump(all_walls, fd, protocol=pickle.HIGHEST_PROTOCOL)
+        # num_rooms = len(st.boxes)
+        #
+        # data_array = np.zeros((num_rooms, 5), np.uint8)
+        # for ii, rr in enumerate(st.boxes):
+        #     data_array[ii, :] = (rr.idx, rr.xmin, rr.ymin, rr.get_width(), rr.get_height())
+        #
+        # with open(img_name + '_xyhw.npy', 'wb') as fd:
+        #     np.save(fd, data_array)
+        #
+        # with open(img_name + '_edgelist_h.pkl', 'wb') as fd:
+        #     pickle.dump(horiz_adj.edges(), fd, protocol=pickle.HIGHEST_PROTOCOL)
+        #
+        # with open(img_name + '_edgelist_v.pkl', 'wb') as fd:
+        #     pickle.dump(vert_adj.edges(), fd, protocol=pickle.HIGHEST_PROTOCOL)
+        #
+        # with open(img_name + '_doorlist_all.pkl', 'wb') as fd:
+        #     all_doors = list(horiz_door.edges()) + list(vert_door.edges())
+        #     pickle.dump(all_doors, fd, protocol=pickle.HIGHEST_PROTOCOL)
+        #
+        # with open(img_name + 'walllist_all.pkl', 'wb') as fd:
+        #     all_walls = list(horiz_wall.edges()) + list(vert_wall.edges())
+        #     pickle.dump(all_walls, fd, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__ == '__main__':
     main()

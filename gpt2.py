@@ -607,6 +607,11 @@ class GPT2Encoder(nn.Module):
                 id_embeds = 0
                 inputs_embeds = self.wte(input_ids)
 
+        if inputs_embeds.dim() == 4:
+            print(inputs_embeds.shape)
+            inputs_embeds = inputs_embeds.sum(dim=-2)
+
+
         if token_type_ids is not None:
             token_type_embeds = self.wte(token_type_ids)
         else:
@@ -622,15 +627,12 @@ class GPT2Encoder(nn.Module):
             pos_embeds = self.pde(position_ids)
             type_embeds = self.wtte(type_ids)
             inputs_embeds = inputs_embeds + pos_embeds + type_embeds
-            print(inputs_embeds.shape)
-            print('hello')
-
 
         hidden_states = inputs_embeds
         hidden_states = self.drop(hidden_states)
 
         if self.passthrough:
-            return hidden_states
+            return (hidden_states, )
 
         # print('inside encoder printing hidden_states.shape', hidden_states.shape)
         output_shape = input_shape + (hidden_states.size(-1),)
@@ -1036,8 +1038,6 @@ class GraphGPTModel(nn.Module):
         # print(edg.shape)
         edg = edg.unsqueeze(-1)
         indexer = edg.repeat((1, 1, self.embed_dim)).long() # bs, edg_len, embd
-        # print('In graph, node, indexer', node_embed.shape, indexer.shape)
-        # print('Unique in indexer', torch.unique(indexer))
 
         edg_embed = torch.gather(node_embed, 1, indexer)
 
@@ -1046,18 +1046,6 @@ class GraphGPTModel(nn.Module):
 
         inner_prod = torch.matmul(pointers, node_embed.permute(0, 2, 1))
 
-        # node_embed = node_embed.permute(1, 0, 2) # len, bs, embd
-        # pointers = pointers.permute(1, 0, 2) # edg_len, bs, embd
-        # pointers = pointers.unsqueeze(0) # 1, edg_len, bs, embd
-        # # print(pointers.shape)
-        # pointers = pointers.permute(1, 0, 2, 3) # edg_len, 1, bs, embd
-        #
-        # # print(pointers.shape, node_embed.shape)
-        # inner_prod = pointers * node_embed
-        # inner_prod = torch.sum(inner_prod, dim=-1) #edg_len, len, bs
-        # inner_prod = inner_prod.permute(2, 0, 1) # bs, edg_len, len
-        #
-        # # print(inner_prod.shape)
         if labels is not None:
             logits = inner_prod[:, :-1, :].contiguous()
             labels = labels[:, 1:].contiguous()
