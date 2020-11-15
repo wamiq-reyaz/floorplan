@@ -4,7 +4,7 @@ import numpy as np
 import scipy.ndimage
 from skimage.io import imread
 import h5py
-from convert_boxes_to_rooms import room_type_names
+from convert_boxes_to_rooms import room_type_names, mask_bbox
 
 def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list_path=None):
 
@@ -223,18 +223,6 @@ def get_room_sample_names(base_path=None, base_dir=None, sample_list_path=None):
 
     return sample_names
 
-# bbox: xmin, ymin, w, h
-def mask_bbox(mask):
-    if not mask.any():
-        raise ValueError('Mask is empty.')
-    if mask.ndim != 2:
-        raise ValueError('Can only compute bounding box for 2-dimenaional masks.')
-    mask_pix_coords = np.hstack([x.reshape(-1, 1) for x in np.nonzero(mask)])
-    bbmin = mask_pix_coords[:, [1, 0]].min(axis=0)
-    bbmax = mask_pix_coords[:, [1, 0]].max(axis=0)
-    bbsize = (bbmax - bbmin) + 1
-    return np.concatenate([bbmin, bbsize])
-
 def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_names=None):
 
     if sample_names is None:
@@ -391,14 +379,14 @@ if __name__ == '__main__':
     # output_basepath = '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull'
     # sample_list_path = None
 
-    input_dir = '../data/results/rplan_on_lifull/no_swapped_labels'
-    output_basepath = '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'
-    sample_list_path = '../data/results/rplan_on_lifull/no_swapped_labels/all.txt'
+    # input_dir = '../data/results/rplan_on_lifull/no_swapped_labels'
+    # output_basepath = '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'
+    # sample_list_path = '../data/results/rplan_on_lifull/no_swapped_labels/all.txt'
 
-    room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, sample_names = load_rooms(base_dir=input_dir, sample_list_path=sample_list_path)
-    save_rooms(
-        base_path=output_basepath, sample_names=sample_names,
-        room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps, room_masks=room_masks)
+    # room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, sample_names = load_rooms(base_dir=input_dir, sample_list_path=sample_list_path)
+    # save_rooms(
+    #     base_path=output_basepath, sample_names=sample_names,
+    #     room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps, room_masks=room_masks)
 
 
     # convert boxes from a list of npy or npz files to our hdf5 format
@@ -438,3 +426,33 @@ if __name__ == '__main__':
     #         room_door_region[0]:room_door_region[0]+room_door_region[2]+1] = 1
     # imsave('/home/guerrero/scratch_space/floorplan/test.png', (img*255.0).astype(np.uint8))
     # print('bla')
+
+
+    # merge two sets of door and wall samples into one set with twice as many samples (need to rename samples and duplicate the nodes)
+    import shutil
+    from tqdm import tqdm
+    node_dir1 = '../data/results/3_tuple_cond_on_lifull/nodes_0.9'
+    node_dir2 = '../data/results/3_tuple_cond_on_lifull/nodes_0.9'
+    door_dir1 = '../data/results/3_tuple_cond_on_lifull/doors_0.9'
+    door_dir2 = '../data/results/3_tuple_cond_on_lifull/doors_0.9_v2'
+    wall_dir1 = '../data/results/3_tuple_cond_on_lifull/walls_0.9'
+    wall_dir2 = '../data/results/3_tuple_cond_on_lifull/walls_0.9_v2'
+    node_dir_tgt = '../data/results/3_tuple_cond_on_lifull/nodes_0.9_merged'
+    door_dir_tgt = '../data/results/3_tuple_cond_on_lifull/doors_0.9_merged'
+    wall_dir_tgt = '../data/results/3_tuple_cond_on_lifull/walls_0.9_merged'
+    add_suffix = '_2'
+    
+    sample_names = []
+    for fn in os.listdir(node_dir1):
+        if fn.endswith('.npz'):
+            sample_names.append(fn[:-len('.npz')])
+
+    for sample_name in tqdm(sample_names):
+        shutil.copyfile(os.path.join(node_dir1, sample_name+'.npz'), os.path.join(node_dir_tgt, sample_name+'.npz'))
+        shutil.copyfile(os.path.join(node_dir2, sample_name+'.npz'), os.path.join(node_dir_tgt, sample_name+add_suffix+'.npz'))
+
+        shutil.copyfile(os.path.join(door_dir1, sample_name+'.pkl'), os.path.join(door_dir_tgt, sample_name+'.pkl'))
+        shutil.copyfile(os.path.join(door_dir2, sample_name+'.pkl'), os.path.join(door_dir_tgt, sample_name+add_suffix+'.pkl'))
+
+        shutil.copyfile(os.path.join(wall_dir1, sample_name+'.pkl'), os.path.join(wall_dir_tgt, sample_name+'.pkl'))
+        shutil.copyfile(os.path.join(wall_dir2, sample_name+'.pkl'), os.path.join(wall_dir_tgt, sample_name+add_suffix+'.pkl'))

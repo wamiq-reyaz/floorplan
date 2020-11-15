@@ -120,13 +120,16 @@ if __name__ == '__main__':
         # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges', 'output_dir': '../data/results/3_tuple_on_rplan_vis/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges'},
 
         # {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'output_dir': '../data/results/rplan_on_rplan_vis'},
-        {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'output_dir': '../data/results/rplan_on_lifull_vis'},
+        # {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'output_dir': '../data/results/rplan_on_lifull_vis'},
         
         # {'room_basepath': '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan', 'output_dir': '../data/results/stylegan_on_rplan_vis'},
         # {'room_basepath': '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull', 'output_dir': '../data/results/stylegan_on_lifull_vis'},
 
         # {'room_basepath': '../data/results/graph2plan_on_rplan_rooms/graph2plan_on_rplan', 'output_dir': '../data/results/graph2plan_on_rplan_vis'},
         # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'output_dir': '../data/results/graph2plan_on_lifull_vis'},
+
+        # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_cond_on_rplan_vis'},
+        {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_cond_on_lifull_vis'},
 
         # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'output_dir': '../data/results/gt_on_rplan_vis'},
         # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'output_dir': '../data/results/gt_on_lifull_vis'},

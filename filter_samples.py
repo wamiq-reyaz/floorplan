@@ -15,8 +15,8 @@ result_sets = [
     # {'box_dir': '../data/results/5_tuple_on_rplan/temp_1.0', 'door_dir': '../data/results/5_tuple_on_rplan/temp_1.0/doors_1.0', 'wall_dir': '../data/results/5_tuple_on_rplan/temp_1.0/walls_1.0', 'output_list': '../data/results/5_tuple_on_rplan/temp_1.0/test_doors_1.0_walls_1.0.txt'},
 
     # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'output_list': '../data/results/3_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_0.9.txt', 'coord_type': 'normalized'},
-    {'box_dir': '../data/results/3_tuple_on_lifull/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_lifull/temp_0.9/doors/_1.0', 'wall_dir': '../data/results/3_tuple_on_lifull/temp_0.9/walls/_1.0', 'output_list': '../data/results/3_tuple_on_lifull/temp_0.9/test_doors_1.0_walls_1.0.txt'},
-    # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/nodes_0.9_0.9.hdf5', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/doors_0.9.hdf5', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/walls_0.9.hdf5', 'output_list': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/test_doors_0.9_walls_0.9.txt'},
+    # {'box_dir': '../data/results/3_tuple_on_lifull/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_lifull/temp_0.9/doors/_1.0', 'wall_dir': '../data/results/3_tuple_on_lifull/temp_0.9/walls/_1.0', 'output_list': '../data/results/3_tuple_on_lifull/temp_0.9/test_doors_1.0_walls_1.0.txt'},
+    # # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/nodes_0.9_0.9.hdf5', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/doors_0.9.hdf5', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/walls_0.9.hdf5', 'output_list': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/test_doors_0.9_walls_0.9.txt'},
 
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_0.9', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_0.9_walls_0.9.txt'},
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/walls_1.0', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_0.9/test_doors_0.9_walls_1.0.txt'},
@@ -26,6 +26,9 @@ result_sets = [
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_0.9', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_0.9_walls_1.0.txt'},
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_0.9', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_0.9.txt'},
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt'},
+
+    # {'box_dir': '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_rplan/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
+    # {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
 ]
 
 max_sample_count = 1000
@@ -38,6 +41,7 @@ for rsi, result_set in enumerate(result_sets):
     sample_list = result_set['sample_list'] if 'sample_list' in result_set else None
     suffix = result_set['suffix'] if 'suffix' in result_set else ''
     coord_type = result_set['coord_type'] if 'coord_type' in result_set else 'absolute'
+    add_exterior = result_set['add_exterior'] if 'add_exterior' in result_set else False
     output_list = result_set['output_list']
 
     print(f'result set [{rsi+1}/{len(result_sets)}]: {output_list}')
@@ -63,7 +67,7 @@ for rsi, result_set in enumerate(result_sets):
             try:
                 _, _, _, _, _, _, _ = convert_boxes_to_rooms(
                     boxes=[boxes[sample_idx]], door_edges=[door_edges[sample_idx]], wall_edges=[wall_edges[sample_idx]], img_res=(64, 64),
-                    room_type_count=len(room_type_names), coord_type=coord_type)
+                    room_type_count=len(room_type_names), coord_type=coord_type, add_exterior=add_exterior)
             except BadBoxesException as err:
                 # print(f'WARNING: could not parse sample {sample_name}:\n{err}')
                 if str(err) not in filter_reasons:
