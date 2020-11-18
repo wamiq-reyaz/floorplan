@@ -47,9 +47,22 @@ def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list
         #             relpath = os.path.relpath(path, start=box_dir)
         #             names.append(os.path.join(relpath if relpath != '.' else '', filename[:-len('.npz')]))
 
+        box_sample_names = []
         for filename in os.listdir(box_dir):
             if os.path.isfile(os.path.join(box_dir, filename)) and (filename.endswith('.npz') or filename.endswith('.npy')):
-                names.append(os.path.join(filename[:-len('.npz')]))
+                box_sample_names.append(os.path.join(filename[:-len('.npz')]))
+
+        door_sample_names = []
+        for filename in os.listdir(door_dir):
+            if os.path.isfile(os.path.join(door_dir, filename)) and filename.endswith('.pkl'):
+                door_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+
+        wall_sample_names = []
+        for filename in os.listdir(wall_dir):
+            if os.path.isfile(os.path.join(wall_dir, filename)) and filename.endswith('.pkl'):
+                wall_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+
+        names = sorted(list(set(box_sample_names) & set(door_sample_names) & set(wall_sample_names)))
 
     else:
         # format 2:
@@ -431,16 +444,20 @@ if __name__ == '__main__':
     # merge two sets of door and wall samples into one set with twice as many samples (need to rename samples and duplicate the nodes)
     import shutil
     from tqdm import tqdm
-    node_dir1 = '../data/results/3_tuple_cond_on_lifull/nodes_0.9'
-    node_dir2 = '../data/results/3_tuple_cond_on_lifull/nodes_0.9'
-    door_dir1 = '../data/results/3_tuple_cond_on_lifull/doors_0.9'
-    door_dir2 = '../data/results/3_tuple_cond_on_lifull/doors_0.9_v2'
-    wall_dir1 = '../data/results/3_tuple_cond_on_lifull/walls_0.9'
-    wall_dir2 = '../data/results/3_tuple_cond_on_lifull/walls_0.9_v2'
-    node_dir_tgt = '../data/results/3_tuple_cond_on_lifull/nodes_0.9_merged'
-    door_dir_tgt = '../data/results/3_tuple_cond_on_lifull/doors_0.9_merged'
-    wall_dir_tgt = '../data/results/3_tuple_cond_on_lifull/walls_0.9_merged'
+    node_dir1 = '../data/results/3_tuple_cond_on_rplan/nodes_0.9'
+    node_dir2 = '../data/results/3_tuple_cond_on_rplan/nodes_0.9'
+    door_dir1 = '../data/results/3_tuple_cond_on_rplan/doors_0.9'
+    door_dir2 = '../data/results/3_tuple_cond_on_rplan/doors_0.9_v2'
+    wall_dir1 = '../data/results/3_tuple_cond_on_rplan/walls_0.9'
+    wall_dir2 = '../data/results/3_tuple_cond_on_rplan/walls_0.9_v2'
+    node_dir_tgt = '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged'
+    door_dir_tgt = '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged'
+    wall_dir_tgt = '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged'
     add_suffix = '_2'
+
+    os.makedirs(node_dir_tgt, exist_ok=True)
+    os.makedirs(door_dir_tgt, exist_ok=True)
+    os.makedirs(wall_dir_tgt, exist_ok=True)
     
     sample_names = []
     for fn in os.listdir(node_dir1):

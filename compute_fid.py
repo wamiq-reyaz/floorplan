@@ -47,7 +47,7 @@ if __name__ == '__main__':
             # {'room_basepath': '../data/results/graph2plan_on_rplan_rooms/graph2plan_on_rplan', 'out_filename': '../data/results/graph2plan_on_rplan_stats/inceptionv3_stats.npz'},
             # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'out_filename': '../data/results/graph2plan_on_lifull_stats/inceptionv3_stats.npz'},
 
-            {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_rplan_stats/inceptionv3_stats.npz'},
+            # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_rplan_stats/inceptionv3_stats.npz'},
             {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_lifull_stats/inceptionv3_stats.npz'},
             
             # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/inceptionv3_stats.npz'},
@@ -127,7 +127,7 @@ if __name__ == '__main__':
             # {'real_stat_filename': '../data/results/gt_on_rplan_stats/inceptionv3_stats.npz', 'fake_stat_filename': '../data/results/graph2plan_on_rplan_stats/inceptionv3_stats.npz'},
             # {'real_stat_filename': '../data/results/gt_on_lifull_stats/inceptionv3_stats.npz', 'fake_stat_filename': '../data/results/graph2plan_on_lifull_stats/inceptionv3_stats.npz'},
 
-            {'real_stat_filename': '../data/results/gt_on_rplan_stats/inceptionv3_stats.npz', 'fake_stat_filename': '../data/results/3_tuple_cond_on_rplan_stats/inceptionv3_stats.npz'},
+            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/inceptionv3_stats.npz', 'fake_stat_filename': '../data/results/3_tuple_cond_on_rplan_stats/inceptionv3_stats.npz'},
             {'real_stat_filename': '../data/results/gt_on_lifull_stats/inceptionv3_stats.npz', 'fake_stat_filename': '../data/results/3_tuple_cond_on_lifull_stats/inceptionv3_stats.npz'},
         ]
 

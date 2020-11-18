@@ -28,7 +28,7 @@ result_sets = [
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt'},
 
     # {'box_dir': '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_rplan/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
-    # {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
+    {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
 ]
 
 max_sample_count = 1000
