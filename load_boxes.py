@@ -6,7 +6,7 @@ from skimage.io import imread
 import h5py
 from convert_boxes_to_rooms import room_type_names, mask_bbox
 
-def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list_path=None):
+def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list_path=None, only_boxes=False):
 
     if sample_list_path is not None:
         with open(sample_list_path, 'r') as f:
@@ -52,17 +52,20 @@ def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list
             if os.path.isfile(os.path.join(box_dir, filename)) and (filename.endswith('.npz') or filename.endswith('.npy')):
                 box_sample_names.append(os.path.join(filename[:-len('.npz')]))
 
-        door_sample_names = []
-        for filename in os.listdir(door_dir):
-            if os.path.isfile(os.path.join(door_dir, filename)) and filename.endswith('.pkl'):
-                door_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+        if only_boxes:
+            names = sorted(list(set(box_sample_names)))
+        else:
+            door_sample_names = []
+            for filename in os.listdir(door_dir):
+                if os.path.isfile(os.path.join(door_dir, filename)) and filename.endswith('.pkl'):
+                    door_sample_names.append(os.path.join(filename[:-len('.pkl')]))
 
-        wall_sample_names = []
-        for filename in os.listdir(wall_dir):
-            if os.path.isfile(os.path.join(wall_dir, filename)) and filename.endswith('.pkl'):
-                wall_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+            wall_sample_names = []
+            for filename in os.listdir(wall_dir):
+                if os.path.isfile(os.path.join(wall_dir, filename)) and filename.endswith('.pkl'):
+                    wall_sample_names.append(os.path.join(filename[:-len('.pkl')]))
 
-        names = sorted(list(set(box_sample_names) & set(door_sample_names) & set(wall_sample_names)))
+            names = sorted(list(set(box_sample_names) & set(door_sample_names) & set(wall_sample_names)))
 
     else:
         # format 2:
@@ -100,7 +103,7 @@ def convert_boxes_to_hdf5(input_dir, output_path, append=False):
     for i, sample_name in enumerate(sample_names):
         boxes_file.create_dataset(sample_name, data=boxes[i])
 
-def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix=''):
+def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', only_boxes=False):
 
     if wall_dir is None:
         wall_dir = box_dir
@@ -141,18 +144,22 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix=''):
             if os.path.exists(os.path.join(box_dir, f'{sample_name}.npz')):
                 boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npz')))
                 # sometimes the ending is .npz, but its actually an npy file, in that case the type returned is np.ndarray
-                if not isinstance(boxes[-1], np.ndarray): 
+                if not isinstance(boxes[-1], np.ndarray):
                     boxes[-1] = boxes[-1]['arr_0']
             else:
                 boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npy')))
 
-            door_edges_filename = f'{sample_name}.pkl'
-            with open(os.path.join(door_dir, door_edges_filename), 'rb') as f:
-                door_edges.append(np.array(pickle.load(f)))
+            if only_boxes:
+                door_edges.append(np.array([]))
+                wall_edges.append(np.array([]))
+            else:
+                door_edges_filename = f'{sample_name}.pkl'
+                with open(os.path.join(door_dir, door_edges_filename), 'rb') as f:
+                    door_edges.append(np.array(pickle.load(f)))
 
-            wall_edges_filename = f'{sample_name}.pkl'
-            with open(os.path.join(wall_dir, door_edges_filename), 'rb') as f:
-                wall_edges.append(np.array(pickle.load(f)))
+                wall_edges_filename = f'{sample_name}.pkl'
+                with open(os.path.join(wall_dir, door_edges_filename), 'rb') as f:
+                    wall_edges.append(np.array(pickle.load(f)))
 
             if boxes[-1].size == 0:
                 boxes[-1] = np.zeros([0, 5], dtype=np.int64)
@@ -458,7 +465,7 @@ if __name__ == '__main__':
     os.makedirs(node_dir_tgt, exist_ok=True)
     os.makedirs(door_dir_tgt, exist_ok=True)
     os.makedirs(wall_dir_tgt, exist_ok=True)
-    
+
     sample_names = []
     for fn in os.listdir(node_dir1):
         if fn.endswith('.npz'):

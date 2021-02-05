@@ -846,10 +846,12 @@ if __name__ == '__main__':
             # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'out_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
 
             # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
+            # {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
 
             # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
             # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
+
+            {'room_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'out_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
@@ -898,7 +900,9 @@ if __name__ == '__main__':
             # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
 
             # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
+
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, stat_dist_set in enumerate(stat_dist_sets):

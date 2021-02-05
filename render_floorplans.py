@@ -129,10 +129,12 @@ if __name__ == '__main__':
         # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'output_dir': '../data/results/graph2plan_on_lifull_vis'},
 
         # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_cond_on_rplan_vis'},
-        {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_cond_on_lifull_vis'},
+        # {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'output_dir': '../data/results/3_tuple_cond_on_lifull_vis'},
 
         # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'output_dir': '../data/results/gt_on_rplan_vis'},
         # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'output_dir': '../data/results/gt_on_lifull_vis'},
+
+        {'room_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'output_dir': '../data/results/housegan_on_lifull_vis'},
     ]
     
     for rsi, result_set in enumerate(result_sets):

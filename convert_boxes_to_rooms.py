@@ -64,7 +64,7 @@ def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_cou
 
         fp_overlap_count = 0
 
-        if coord_type not in ['absolute', 'normalized']:
+        if coord_type not in ['absolute', 'normalized', 'absolute_minmax_corner']:
             raise ValueError('Invalid coordinate type.')
         
         if fp_boxes.ndim != 2 or fp_boxes.shape[1] != 5:
@@ -79,7 +79,11 @@ def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_cou
         if (fp_door_edges.size > 0  and fp_door_edges.max() >= fp_boxes.shape[0]) or (fp_wall_edges.size > 0 and fp_wall_edges.max() >= fp_boxes.shape[0]):
             raise BadBoxesException('Invalid edges, the index is out of bounds.')
 
-        if fp_boxes.dtype == np.float32:
+        if coord_type == 'absolute_minmax_corner':
+            # convert from (min_x, min_y, max_x, max_y) to (min_x, min_y, w, h)
+            fp_boxes[:, [3, 4]] -= fp_boxes[:, [1, 2]]
+
+        if fp_boxes.dtype in [np.float32, np.float64]:
             # boxes are probably 3-tuples which are stored in float format 
 
             if coord_type == 'normalized':
@@ -87,7 +91,7 @@ def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_cou
                 # (with integer coordinates, boxes start at lower left pixel corner and end at upper right pixel corner, giving an img_res+1 x img_res+1 grid)
                 fp_boxes[:, [1, 3]] *= img_res[1]
                 fp_boxes[:, [2, 4]] *= img_res[0]
-
+            
             # round to get integers, with carefully making sure we don't introduce gaps or overlaps
             fp_boxes[:, 3:] += fp_boxes[:, 1:3] # convert from w,h to max corner
             fp_boxes = fp_boxes.round().astype(np.int64)
@@ -303,10 +307,12 @@ if __name__ == '__main__':
         # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'output_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'},
         
         # {'box_dir': '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged', 'sample_list': '../data/results/3_tuple_cond_on_rplan/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'add_exterior': True},
-        {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'sample_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'add_exterior': True},
+        # {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'sample_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'add_exterior': True},
 
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'output_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan'},
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'output_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull'},
+
+        {'box_dir': '../data/results/housegan_on_lifull/boxes', 'door_dir': '../data/results/housegan_on_lifull/doors', 'wall_dir': '../data/results/housegan_on_lifull/walls', 'sample_list': '../data/results/housegan_on_lifull/all.txt', 'output_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'add_exterior': True, 'only_boxes': True,  'coord_type': 'absolute_minmax_corner'},
     ]
 
     for rsi, result_set in enumerate(result_sets):
@@ -318,12 +324,13 @@ if __name__ == '__main__':
         suffix = result_set['suffix'] if 'suffix' in result_set else ''
         coord_type = result_set['coord_type'] if 'coord_type' in result_set else 'absolute'
         add_exterior = result_set['add_exterior'] if 'add_exterior' in result_set else False
+        only_boxes = result_set['only_boxes'] if 'only_boxes' in result_set else False
         output_basepath = result_set['output_basepath']
 
         print(f'result set [{rsi+1}/{len(result_sets)}]: {output_basepath}')
 
         # read the boxes and edges of all floor plans in the input directory
-        sample_names = get_box_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list)
+        sample_names = get_box_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list, only_boxes=only_boxes)
 
         os.makedirs(os.path.dirname(output_basepath), exist_ok=True)
 
@@ -338,7 +345,7 @@ if __name__ == '__main__':
             samples_to = min(batch_size*(batch_idx+1), len(sample_names))
             batch_sample_names = sample_names[samples_from:samples_to]
             
-            boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
+            boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix, only_boxes=only_boxes)
 
             room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, overlap_count = convert_boxes_to_rooms(
                 boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=len(room_type_names), coord_type=coord_type, add_exterior=add_exterior)

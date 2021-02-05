@@ -28,7 +28,9 @@ result_sets = [
     # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'output_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt'},
 
     # {'box_dir': '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_rplan/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
-    {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
+    # {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
+
+    {'box_dir': '../data/results/housegan_on_lifull/boxes', 'door_dir': '../data/results/housegan_on_lifull/doors', 'wall_dir': '../data/results/housegan_on_lifull/walls', 'output_list': '../data/results/housegan_on_lifull/all.txt', 'add_exterior': True, 'only_boxes': True, 'coord_type': 'absolute_minmax_corner'},
 ]
 
 max_sample_count = 1000
@@ -42,12 +44,13 @@ for rsi, result_set in enumerate(result_sets):
     suffix = result_set['suffix'] if 'suffix' in result_set else ''
     coord_type = result_set['coord_type'] if 'coord_type' in result_set else 'absolute'
     add_exterior = result_set['add_exterior'] if 'add_exterior' in result_set else False
+    only_boxes = result_set['only_boxes'] if 'only_boxes' in result_set else False
     output_list = result_set['output_list']
 
     print(f'result set [{rsi+1}/{len(result_sets)}]: {output_list}')
 
     # read the boxes and edges of all floor plans in the input directory
-    sample_names = get_box_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list)
+    sample_names = get_box_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list, only_boxes=only_boxes)
 
     filter_reasons = {}
     filtered_sample_names = []
@@ -61,7 +64,7 @@ for rsi, result_set in enumerate(result_sets):
         samples_to = min(batch_size*(batch_idx+1), len(sample_names))
         batch_sample_names = sample_names[samples_from:samples_to]
 
-        boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix)
+        boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix, only_boxes=only_boxes)
 
         for sample_idx, sample_name in enumerate(batch_sample_names):
             try:
