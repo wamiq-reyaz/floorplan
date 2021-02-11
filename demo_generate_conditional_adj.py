@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import argparse
 
-from rplan import RplanConditional, LIFULLConditional
-from gpt2 import EncDecGPTModel
+from rplan import RplanConditional
+from gpt2 import EncDecGPTModel, GraphGPTModel
 from utils import make_rgb_indices, rplan_map
 
 from transformers.configuration_gpt2 import GPT2Config
@@ -15,28 +15,37 @@ from easydict import EasyDict as ED
 import pickle
 from datetime import datetime
 from utils import parse_wall_or_door_seq, parse_vert_seq, \
-    top_k_top_p_filtering, on_local
+    top_k_top_p_filtering, on_local, parse_edge_seq
+
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
 
+    parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
     # Model
+    parser.add_argument('--epochs', default=60, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
-    parser.add_argument('--seq_len', default=120, type=int, help='the number of vertices')
-    parser.add_argument('--edg_len', default=48, type=int, help='how long is the edge length or door length')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
     parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
-    parser.add_argument('--doors', default='all', type=str, help='h/v/all doors')
     parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=100, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
-    parser.add_argument('--wh', default=False, type=bool, help='number of decoder layers')
+    parser.add_argument('--pos_id', default=True, type=bool, help='Whether to use pos_id in encoder')
+    parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
+    parser.add_argument('--adj', default='h', type=str, help='h/v/all doors')
+    parser.add_argument('--passthrough', default=False, type=bool,
+                        help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--wh', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
     parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
     # optimizer
+    parser.add_argument('--step', default=25, type=int, help='how many epochs before reducing lr')
+    parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='initial learning rate')
+    parser.add_argument('--gamma', default=0.1, type=float, help='reduction in lr')
     parser.add_argument('--bs', default=64, type=int, help='batch size')
-    parser.add_argument('--epochs', default=40, type=int, help='number of total epochs to run')
     parser.add_argument('--device', default='cuda:0', type=str, help='device to use')
 
     # Data
@@ -68,29 +77,68 @@ if __name__ == '__main__':
 
     if on_local():
         args.root_dir = './'
-        args.datapath = '/mnt/iscratch/datasets/lifull_ddg_var'
+        args.datapath = '/mnt/iscratch/datasets/rplan_ddg_var'
 
     else:  # assume IBEX
         args.root_dir = '/ibex/scratch/parawr/floorplan/'
         args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
+    # BATCH_SIZE = args.bs
+    BATCH_SIZE = 1
 
-    val_set = LIFULLConditional(root_dir=args.datapath,
-                               split='test',
-                               enc_len=args.enc_n,
-                               dec_len=args.dec_n,
-                               vocab_size=args.vocab,
-                               drop_dim=args.tuples == 3,
-                               wh=args.wh)
+    from natsort import natsorted
+    from glob import glob
+
+    boxes = glob(os.path.join(args.input_dir, '*.npz'))
+    # exteriors = glob(os.path.join(args.input_dir, 'exterior*'))
+
+    boxes = natsorted(boxes)
+    # exteriors = natsorted(exteriors)
+
+    class dataset(torch.utils.data.Dataset):
+        def __init__(self,
+                     boxes,
+                     seq_len=args.enc_n,
+                     edg_len=args.dec_n):
+            super().__init__()
+
+            self.boxes = boxes
+
+            self.seq_len = seq_len
+            self.edg_len = edg_len
+
+
+        def __len__(self):
+            return len(boxes)
+
+
+        def __getitem__(self, idx):
+            # print(type(self.boxes), type(self.boxes[idx]))
+            with open(self.boxes[idx], 'rb') as fd:
+                boxes = np.load(fd)['arr_0']
+
+            name = os.path.basename(self.boxes[idx])
+            base_name = os.path.splitext(name)[0]
+            length = boxes.shape[0]
+
+            vert_seq = np.ones((self.seq_len, 5), dtype=np.uint8) * (66)
+            vert_seq[0, :] = (0,) * 5
+            vert_seq[2:length + 2, :] = boxes + 1
+
+            vert_attn_mask = np.zeros(self.seq_len)
+            vert_attn_mask[:length + 2] = 1
+
+            return {'vert_seq': torch.tensor(vert_seq).long(),
+                    'vert_attn_mask': torch.tensor(vert_attn_mask),
+                    'base_name': base_name}
+
+
+    val_set = dataset(boxes=boxes)
+    aa =val_set[0]
 
     dloader = DataLoader(val_set, batch_size=args.bs, num_workers=10)
 
-    if args.flipped:
-        enc_is_causal=True
-        dec_is_causal=False
-    else:
-        enc_is_causal=False
-        dec_is_causal=True
+    # sys.exit()
 
     # TODO: variable - depends on the model you need to sample from
     enc = GPT2Config(
@@ -100,9 +148,13 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,
-        is_causal=enc_is_causal,
+        is_causal=False,
         is_encoder=True,
-        separate=False
+        passthrough=args.passthrough,
+        id_embed=args.id_embed,
+        pos_id=args.pos_id,
+        n_types=args.tuples,
+        separate=True
     )
 
     dec = GPT2Config(
@@ -112,11 +164,11 @@ if __name__ == '__main__':
         n_embd=args.dim,
         n_layer=args.dec_layer,
         n_head=12,
-        is_causal=dec_is_causal,
+        is_causal=False,
         is_encoder=False,
         n_types=args.tuples
     )
-    model = EncDecGPTModel(enc, dec)
+    model = GraphGPTModel(enc, dec)
 
     device = torch.device(args.device)
 
@@ -140,66 +192,46 @@ if __name__ == '__main__':
     model.eval()
 
     for jj, data in tqdm(enumerate(dloader)):
-        # bs = 10
-        # enc_seq = data['enc_seq'].cuda().repeat(bs, 1)
-        # enc_attn = data['enc_attn'].cuda().repeat(bs, 1)
-        # enc_pos = data['enc_pos_id'].cuda().repeat(bs, 1)
-        # names = data['base_name'] * bs
-        # print(names)
-
-        enc_seq = data['enc_seq'].cuda()
-        enc_attn = data['enc_attn'].cuda()
-        enc_pos = data['enc_pos_id'].cuda()
+        vert_seq = data['vert_seq'].cuda()
+        vert_attn_mask = data['vert_attn_mask'].cuda()
         names = data['base_name']
 
+        # print(vert_seq)
+        # print(vert_attn_mask)
 
+        bs = vert_seq.shape[0]
 
-        bs = enc_seq.shape[0]
         input_ids = torch.zeros(args.dec_n, dtype=torch.long).to(device=device).unsqueeze(0).repeat(bs, 1)
         attn_mask = torch.zeros(args.dec_n, dtype=torch.float, device=device).unsqueeze(0).repeat(bs, 1)
-        # print(input_ids.shape, enc_seq.shape)
         for ii in range(args.dec_n - 1):
             attn_mask[:, :ii+1] = 1
             with torch.no_grad():
-                if args.flipped:
-                    loss = model(enc_seq=input_ids,
-                                dec_seq=enc_seq,
-                                enc_attn_mask=attn_mask,
-                                dec_attn_mask=enc_attn
-                                )
-                else:
-                    loss = model( enc_seq=enc_seq,
-                        dec_seq=input_ids,
-                        enc_attn_mask=enc_attn,
-                        dec_attn_mask=attn_mask
-                        )
+                loss = model(node=vert_seq,
+                             edg=input_ids,
+                             attention_mask=attn_mask,
+                             labels=input_ids,
+                             vert_attn_mask=vert_attn_mask)
 
-                logits = top_k_top_p_filtering(loss[0][:, ii, :], top_p=0.9)
+                logits = top_k_top_p_filtering(loss[1][:, ii, :], top_p=0.9)
                 probs = torch.softmax(logits.squeeze(), dim=-1)
                 next_token = torch.multinomial(probs, num_samples=1)
 
             input_ids[:, ii+1] = next_token.squeeze()
 
         input_ids = input_ids.cpu().numpy().squeeze()[:, 1:]  # drop 0
-        samples = [input_ids[ii, :] for ii in range(bs)]
+        samples = [input_ids[ii, :]  for ii in range(bs)]
+
+        #
+        # print_idx = 0
+        # print(vert_seq[print_idx], vert_attn_mask[print_idx])
+        # print(samples[print_idx])
+        # print(parse_wall_or_door_seq(samples[print_idx]))
+        # print(names[0], names[1])
+        # sys.exit()
 
         for kk, curr_sample in enumerate(samples):
-            # print(kk)
-            # print(curr_sample.shape)
-            stop_token_idx = np.argmax(curr_sample)
-            # print(stop_token_idx)
+            root_name = names[kk]
+            save_path = os.path.join('cond_lifull3_v2', 'doors_0.9', root_name + '.pkl')
+            with open(save_path, 'wb') as fd:
+                pickle.dump(parse_wall_or_door_seq(curr_sample), fd, protocol=pickle.HIGHEST_PROTOCOL)
 
-            # if not valid length
-            if stop_token_idx % 5 != 0:
-                print('shit')
-                continue
-            else:
-                boxes = curr_sample[:stop_token_idx].reshape((-1, 5)) - 1
-
-            new_name = names[kk].replace('/', '_')
-            print(new_name)
-            with open(f'cond_lifull3_v2/nodes_0.9/{new_name}_{kk}.npz', 'wb') as fd:
-                np.savez(fd, boxes)
-
-        if jj==10:
-            break

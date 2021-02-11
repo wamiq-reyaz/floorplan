@@ -13,8 +13,8 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 import argparse
 from datetime import datetime as dt
-from rplan import RrplanGraph, Flip, Rot90,RplanConditionalDoors
-from gpt2 import EncDecGPTModel, GraphGPTModel
+from rplan import RrplanGraph, Flip, Rot90,RplanConstrainedGraph
+from gpt2 import ConstrGPTModel
 from transformers.configuration_gpt2 import GPT2Config
 import shutil
 from glob import glob
@@ -24,7 +24,7 @@ import json
 import wandb
 import uuid
 
-PROJECT = 'doors_cond'
+PROJECT = 'adj_constr_v2'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model corrector', conflict_handler='resolve')
@@ -32,15 +32,18 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=60, type=int, help='number of total epochs to run')
     parser.add_argument('--dim', default=264, type=int, help='number of dims of transformer')
     parser.add_argument('--vocab', default=65, type=int, help='quantization levels')
-    parser.add_argument('--tuples', default=5, type=int, help='3 or 5 based on initial sampler')
-    parser.add_argument('--enc_n', default=120, type=int, help='number of encoder tokens')
+    parser.add_argument('--tuples', default=3, type=int, help='3 or 5 based on initial sampler')
+    parser.add_argument('--constr_n', default=70, type=int, help='length of the constraint sequences')
+    parser.add_argument('--constr_layer', default=3, type=int, help='layers of the constraint encoder')
+    parser.add_argument('--enc_n', default=80, type=int, help='number of encoder tokens')
     parser.add_argument('--enc_layer', default=12, type=int, help='number of encoder layers')
-    parser.add_argument('--dec_n', default=48, type=int, help='number of decoder tokens')
+    parser.add_argument('--dec_n', default=220, type=int, help='number of decoder tokens')
     parser.add_argument('--dec_layer', default=12, type=int, help='number of decoder layers')
     parser.add_argument('--pos_id', default=True, type=bool, help='Whether to use pos_id in encoder')
     parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
+    parser.add_argument('--adj', default='h', type=str, help='h/v/all doors')
     parser.add_argument('--passthrough', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
-    parser.add_argument('--wh', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--wh', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
     parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
 
@@ -61,10 +64,11 @@ if __name__ == '__main__':
     parser.add_argument("--tags", default='', type=str, help="Wandb tags")
 
     args = parser.parse_args()
+    args.lifull=False
 
     if args.lifull:
         args.dataset = 'lifull'
-        args.dec_n = 90
+        args.dec_n = 220
 
     if args.dataset == 'rplan':
         if on_local():
@@ -75,23 +79,26 @@ if __name__ == '__main__':
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
             args.datapath = '/ibex/scratch/parawr/datasets/rplan_ddg_var'
 
-        dset = RplanConditionalDoors(root_dir=args.datapath,
+        dset = RplanConstrainedGraph(root_dir=args.datapath,
                      split='train',
+                     constr_len=args.constr_n,
                      enc_len=args.enc_n,
                      dec_len=args.dec_n,
                      drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
+                     edg_type=args.adj,
                      wh=args.wh,
-                                     ver2=True
                     )
-        val_set = RplanConditionalDoors(root_dir=args.datapath,
+        val_set = RplanConstrainedGraph(root_dir=args.datapath,
                               split='val',
+                              constr_len=args.constr_n,
                               enc_len=args.enc_n,
                               dec_len=args.dec_n,
                               vocab_size=args.vocab,
+                              edg_type=args.adj,
                               drop_dim=args.tuples == 3,
-                              wh=args.wh,
-                                        ver2=True)
+                              wh=args.wh
+                                        )
 
     elif args.dataset == 'lifull':
         if on_local():
@@ -102,42 +109,52 @@ if __name__ == '__main__':
             args.root_dir = '/ibex/scratch/parawr/floorplan/'
             args.datapath = '/ibex/scratch/parawr/datasets/lifull_ddg_var'
 
-        dset = RplanConditionalDoors(root_dir=args.datapath,
+        dset = RplanConstrainedGraph(root_dir=args.datapath,
                      split='train',
+                     constr_len=args.constr_n,
                      enc_len=args.enc_n,
                      dec_len=args.dec_n,
                      drop_dim=args.tuples == 3,
                      vocab_size=args.vocab,
+                     edg_type=args.adj,
                      wh=args.wh,
-                     lifull=True,
+                     lifull=True
                     )
 
-        val_set = RplanConditionalDoors(root_dir=args.datapath,
-                              split='val',
-                              enc_len=args.enc_n,
-                              dec_len=args.dec_n,
-                              vocab_size=args.vocab,
-                              drop_dim=args.tuples == 3,
-                              wh=args.wh,
-                              lifull=True,
-                              )
+        val_set = RplanConstrainedGraph(root_dir=args.datapath,
+                     split='val',
+                     constr_len=args.constr_n,
+                     enc_len=args.enc_n,
+                     dec_len=args.dec_n,
+                     drop_dim=args.tuples == 3,
+                     vocab_size=args.vocab,
+                     edg_type=args.adj,
+                     wh=args.wh,
+                     lifull=True
+                    )
 
     dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
 
 
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
-    # args.passthrough=True
 
-    if args.flipped:
-        enc_is_causal=True
-        dec_is_causal=False
-        PROJECT = 'conditional_flipped'
-    else:
-        enc_is_causal = False,
-        dec_is_causal = True
-        PROJECT = 'doors_condv2'
 
+    constr = GPT2Config(
+        vocab_size=args.vocab,
+        n_positions=args.constr_n,
+        n_ctx=args.constr_n,
+        n_embd=args.dim,
+        n_layer=args.constr_layer,
+        n_head=12,
+        is_causal=False,
+        is_encoder=True,
+        passthrough=False,
+        id_embed=args.id_embed,
+        use_pos_emb=True,
+        n_types=2,
+        separate=False
+    )
 
     enc = GPT2Config(
         vocab_size=args.vocab,
@@ -150,7 +167,7 @@ if __name__ == '__main__':
         is_encoder=True,
         passthrough=args.passthrough,
         id_embed=args.id_embed,
-        pos_id=args.pos_id,
+        use_pos_emb=args.pos_id,
         n_types=args.tuples,
         separate=True
     )
@@ -167,9 +184,7 @@ if __name__ == '__main__':
         n_types=args.tuples
     )
 
-    # print()
-    # sys.exit()
-    model = GraphGPTModel(enc, dec)
+    model = ConstrGPTModel(constr, enc, dec)
 
     model = DataParallel(model.cuda())
 
@@ -184,7 +199,7 @@ if __name__ == '__main__':
     val_steps = 1
 
     ## Basic logging
-    SAVE_LOCATION = args.root_dir + f'models/cond_doors/' + run_id + '/'
+    SAVE_LOCATION = args.root_dir + f'models/{args.dataset}_{args.tuples}_constrained_{args.adj}/' + run_id + '/'
 
     code_dir = SAVE_LOCATION + 'code'
     if not os.path.exists(SAVE_LOCATION):
@@ -208,46 +223,57 @@ if __name__ == '__main__':
         for steps, data in tqdm(enumerate(dloader)):
             global_steps += 1
             optimizer.zero_grad()
-            vert_seq = data['vert_seq'].cuda()
-            edg_seq = data['edg_seq'].cuda()
-            attn_mask = data['attn_mask'].cuda()
-            pos_id = data['pos_id'].cuda()
-            vert_attn_mask = data['vert_attn_mask'].cuda()
 
-            loss = model( node=vert_seq,
-                          edg=edg_seq,
-                          attention_mask=attn_mask,
-                          labels=edg_seq,
-                          vert_attn_mask=vert_attn_mask)
+
+            constr_seq = data['constr_seq'].cuda()
+            enc_seq = data['enc_seq'].cuda()
+            dec_seq = data['dec_seq'].cuda()
+            constr_attn = data['constr_attn'].cuda()
+            enc_attn = data['enc_attn'].cuda()
+            dec_attn = data['dec_attn'].cuda()
+
+            # print(dec_seq)
+
+            loss = model( constr_seq=constr_seq,
+                        enc_seq=enc_seq,
+                       dec_seq=dec_seq,
+                       constr_attn_mask=constr_attn,
+                       enc_attn_mask=enc_attn,
+                       dec_attn_mask=dec_attn,
+                       labels=dec_seq)
 
             loss[0].mean().backward()
 
+
             optimizer.step()
-            # lr_scheduler.step()
+            # warmup_sched.step()
 
             # if steps % 100 == 0:
             # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
-        torch.save(model.state_dict(), SAVE_LOCATION + f'model_cond_3.pth')
+        torch.save(model.state_dict(), SAVE_LOCATION + f'model_constr_adj.pth')
 
         model.eval()
         val_step_size = (global_steps - val_steps) // len(val_loader)
         all_val_stats = []
         with torch.no_grad():
             for steps, data in tqdm(enumerate(val_loader)):
-                vert_seq = data['vert_seq'].cuda()
-                edg_seq = data['edg_seq'].cuda()
-                attn_mask = data['attn_mask'].cuda()
-                pos_id = data['pos_id'].cuda()
-                vert_attn_mask = data['vert_attn_mask'].cuda()
-                # print(vert_seq.shape)
+                constr_seq = data['constr_seq'].cuda()
+                enc_seq = data['enc_seq'].cuda()
+                dec_seq = data['dec_seq'].cuda()
+                constr_attn = data['constr_attn'].cuda()
+                enc_attn = data['enc_attn'].cuda()
+                dec_attn = data['dec_attn'].cuda()
 
-                loss = model(node=vert_seq,
-                             edg=edg_seq,
-                             attention_mask=attn_mask,
-                             labels=edg_seq,
-                             vert_attn_mask=vert_attn_mask)
+                # print(dec_seq)
+                loss = model(constr_seq=constr_seq,
+                             enc_seq=enc_seq,
+                             dec_seq=dec_seq,
+                             constr_attn_mask=constr_attn,
+                             enc_attn_mask=enc_attn,
+                             dec_attn_mask=dec_attn,
+                             labels=dec_seq)
 
                 all_val_stats.append(loss[0].mean().item())
 
@@ -258,7 +284,7 @@ if __name__ == '__main__':
 
         if total_nll < best_nll:
             best_nll = total_nll
-            torch.save(model.state_dict(), SAVE_LOCATION + f'model_cond_best.pth')
+            torch.save(model.state_dict(), SAVE_LOCATION + f'model_constr_adj_best.pth')
 
 
 

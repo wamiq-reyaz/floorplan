@@ -1073,6 +1073,25 @@ class SplittingTree(object):
         return self.vert_wall
 
 
+    def get_door_constraints(self):
+        self.find_vert_door()
+        self.find_horiz_door()
+        self.find_vert_adj()
+        self.find_horiz_adj()
+        self.find_vert_wall()
+        self.find_horiz_wall()
+
+
+        self.door_constraints = nx.Graph()
+
+        new_nodes = []
+        new_nodes_to_old = {}
+
+
+
+        print('asdf')
+
+
     def show_graphs(self):
         f, ax = plt.subplots(1, 3, dpi=160, figsize=(4, 4), sharex=False, sharey=False)
 
@@ -1417,10 +1436,14 @@ if __name__ == '__main__':
     #     print(e[0])
 
     solver = LPSolver(floor)
+    solver.lines_align = True
+
     solver._read_graph()
-    solver.set_min_separation(0.01)
-    solver._add_min_area_constrains([0.2, 0.1, 0.31, 0.3, 0.25])
+    # solver.set_min_separation(0.01)
+    # solver._add_min_area_constrains([0.2, 0.1, 0.31, 0.3, 0.25])
     # print(solver._model)
+    solver._add_height_constraints([6, 8, 10, 23, 23], eps=0.1)
+    solver._add_width_constraints([23, 8, 10, 23, 6], eps=0.1)
     solver.solve(mode=None)
 
     print(solver.widths.X)
@@ -1431,6 +1454,8 @@ if __name__ == '__main__':
     solver._set_floor_data()
     ax = plt.subplot(111)
     floor.draw(ax=ax)
+    ax.set_xlim([0, 50])
+    ax.set_ylim([0,50])
 
     plt.show()
 

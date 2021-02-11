@@ -139,10 +139,12 @@ class RplanConditional(Dataset):
             self.transforms = Identity()
 
     def __getitem__(self, idx):
+        name = self.file_names[idx].strip('\n')
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
                             '_image_nodoor_xyhw.npy')
         if not os.path.exists(path):
+            print(path)
             path = os.path.join(self.root_dir,
                             self.file_names[0].strip('\n') +\
                             '_image_nodoor_xyhw.npy')
@@ -205,7 +207,8 @@ class RplanConditional(Dataset):
                 'enc_attn': torch.tensor(enc_attn),
                 'dec_attn': torch.tensor(dec_attn),
                 'enc_pos_id': torch.tensor(enc_pos_id).long(),
-                'dec_pos_id': torch.tensor(dec_pos_id).long()}
+                'dec_pos_id': torch.tensor(dec_pos_id).long(),
+                'base_name': name}
 
 
     def __len__(self):
@@ -240,6 +243,7 @@ class LIFULLConditional(Dataset):
             self.transforms = Identity()
 
     def __getitem__(self, idx):
+        name = self.file_names[idx].strip('\n')
         path = os.path.join(self.root_dir,
                             self.file_names[idx].strip('\n') +\
                             '_xyhw.npy')
@@ -306,7 +310,8 @@ class LIFULLConditional(Dataset):
                 'enc_attn': torch.tensor(enc_attn),
                 'dec_attn': torch.tensor(dec_attn),
                 'enc_pos_id': torch.tensor(enc_pos_id).long(),
-                'dec_pos_id': torch.tensor(dec_pos_id).long()}
+                'dec_pos_id': torch.tensor(dec_pos_id).long(),
+                'base_name': name}
 
 
     def __len__(self):
@@ -925,6 +930,307 @@ class LIFULL(Dataset):
     def __len__(self):
         return len(self.file_names)
 
+class RplanConstrained(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False,
+                 doors='all',
+                 lifull=False,
+                 ):
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split + '.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.enc_len = enc_len
+        self.vocab_size = vocab_size
+        self.dec_len = dec_len
+        self.dims = 3 if drop_dim else 5
+        self.doors = doors
+        self.wh = wh
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+            self.constr_suffix = 'lifull_adj'
+        else:
+            self.suffix = '_image_nodoor'
+            self.constr_suffix = 'rplan_adj'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') + \
+                            self.suffix + '_xyhw.npy')
+        if not os.path.exists(path):
+            path = os.path.join(self.root_dir,
+                                self.file_names[0].strip('\n') + \
+                                self.suffix + '_xyhw.npy')
+
+
+        type_file = os.path.join(self.root_dir,
+                                 self.constr_suffix,
+                                 self.file_names[idx].strip('\n') + \
+                                 '_room_types.npz')
+
+        if not os.path.exists(type_file):
+            print(type_file)
+
+            type_file = os.path.join(self.root_dir,
+                                 self.constr_suffix,
+                                 self.file_names[0].strip('\n') + \
+                                 '_room_types.npz')
+
+        bbox_file = os.path.join(self.root_dir,
+                                 self.constr_suffix,
+                                 self.file_names[idx].strip('\n') + \
+                                 '_room_bboxes.npz')
+
+        if not os.path.exists(bbox_file):
+            print(bbox_file)
+
+            bbox_file = os.path.join(self.root_dir,
+                                     self.constr_suffix,
+                                     self.file_names[0].strip('\n') + \
+                                     '_room_bboxes.npz')
+
+        zero_token = np.array(0, dtype=np.uint8)
+        stop_token = np.array([self.vocab_size + 1], dtype=np.uint8)
+
+        enc_seq = np.ones(self.enc_len, dtype=np.uint8) * self.vocab_size
+        dec_seq = np.ones(self.dec_len, dtype=np.uint8) * self.vocab_size
+
+        enc_attn = np.ones(self.enc_len)
+        dec_attn = np.ones(self.dec_len)
+
+        enc_pos_id = np.arange(self.enc_len, dtype=np.uint8)
+        dec_pos_id = np.arange(self.dec_len, dtype=np.uint8)
+
+        # adjacency data first
+        with open(type_file, 'rb') as fd:
+            constr_types = np.load(fd)['arr_0']
+
+
+        with open(bbox_file, 'rb') as fd:
+            constr_bboxes = np.load(fd)['arr_0']
+            constr_bboxes = constr_bboxes[:, [2, 3]] ## bboxes are xmin, ymin, w, h
+
+        # print(constr_types[:, None].shape, constr_bboxes.shape)
+        constr = np.hstack((constr_types[:, None], constr_bboxes)) + 1
+        enc_tokens = np.hstack(
+                            (
+                                zero_token,
+                                constr.ravel(),
+                                stop_token
+                            ))
+
+        # token/node data
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            if self.dims == 3:
+                if self.wh:
+                    tokens = tokens[:, [0, 3, 4]]
+                else:
+                    tokens = tokens[:, :3]
+            tokens = tokens.ravel()
+            dec_tokens = np.hstack((zero_token, tokens, stop_token))
+
+        elength = len(enc_tokens)
+        dlength = len(dec_tokens)
+
+        enc_seq[:elength] = enc_tokens
+        dec_seq[:dlength] = dec_tokens
+
+        enc_attn[elength + 1:] = 0.0
+        dec_attn[dlength + 1:] = 0.0
+
+        return {'enc_seq': torch.tensor(enc_seq).long(),
+                'dec_seq': torch.tensor(dec_seq).long(),
+                'enc_attn': torch.tensor(enc_attn),
+                'dec_attn': torch.tensor(dec_attn),
+                'enc_pos_id': torch.tensor(enc_pos_id).long(),
+                'dec_pos_id': torch.tensor(dec_pos_id).long(),
+                'base_name': self.file_names[idx].strip('\n')}
+
+    def __len__(self):
+        return len(self.file_names)
+
+
+class RplanConstrainedGraph(Dataset):
+    def __init__(self, root_dir, split=None,
+                 pad_start=True, pad_end=True,
+                 constr_len=200,
+                 enc_len=200,
+                 dec_len=100,
+                 vocab_size=65,
+                 drop_dim=False,
+                 transforms=None,
+                 wh=False,
+                 edg_type='h',
+                 lifull=False,
+                 ):
+        self.root_dir = root_dir
+        with open(os.path.join(self.root_dir, split + '.txt'), 'r') as fd:
+            self.file_names = fd.readlines()
+
+        self.pad_start = pad_start
+        self.pad_end = pad_end
+        self.constr_len = constr_len
+        self.enc_len = enc_len
+        self.vocab_size = vocab_size
+        self.dec_len = dec_len
+        self.dims = 3
+        self.edg_type = edg_type
+        self.wh = wh
+        self.lifull = lifull
+
+        if self.lifull:
+            self.suffix = ''
+            self.constr_suffix = 'lifull_adj'
+        else:
+            self.suffix = '_image_nodoor'
+            self.constr_suffix = 'rplan_adj'
+
+        if transforms:
+            self.transforms = transforms
+        else:
+            self.transforms = Identity()
+
+    @classmethod
+    def from_args(cls, *args, **kwargs):
+        return cls.__init(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') + \
+                            self.suffix + '_xyhw.npy')
+        if not os.path.exists(path):
+            print(path)
+            path = os.path.join(self.root_dir,
+                                self.file_names[0].strip('\n') + \
+                                self.suffix + '_xyhw.npy')
+
+
+        constr_file = os.path.join(self.root_dir,
+                                 self.constr_suffix,
+                                 self.file_names[idx].strip('\n') + \
+                                 '_room_door_edges.npz')
+
+        if not os.path.exists(constr_file):
+            print(constr_file)
+
+            constr_file = os.path.join(self.root_dir,
+                                 self.constr_suffix,
+                                 self.file_names[0].strip('\n') + \
+                                 '_room_door_edges.npz')
+
+        adj_path = os.path.join(self.root_dir,
+                            self.file_names[idx].strip('\n') + \
+                            self.suffix + f'_edgelist_{self.edg_type}.pkl')
+
+        if not os.path.exists(adj_path):
+            print(adj_path)
+            adj_path = os.path.join(self.root_dir,
+                                self.file_names[0].strip('\n') + \
+                                self.suffix +  f'_edgelist_{self.edg_type}.pkl')
+
+        zero_token = np.array(0, dtype=np.uint8)
+        stop_token = np.array([self.vocab_size + 1], dtype=np.uint8)
+
+        constr_seq = np.zeros(self.constr_len, dtype=np.uint8)
+        enc_seq = np.zeros(self.enc_len, dtype=np.uint8)
+        dec_seq = np.ones(self.dec_len, dtype=np.uint8) * -2
+
+        constr_attn = np.ones(self.constr_len)
+        enc_attn = np.ones(self.enc_len)
+        dec_attn = np.ones(self.dec_len)
+
+        constr_pos_id = np.arange(self.constr_len, dtype=np.uint8)
+        enc_pos_id = np.arange(self.enc_len, dtype=np.uint8)
+        dec_pos_id = np.arange(self.dec_len, dtype=np.uint8)
+
+        # adjacency data first
+        with open(constr_file, 'rb') as fd:
+            constrs = np.load(fd)['arr_0']
+
+
+        #constraint data
+        constrs = constrs.ravel() + 1
+
+        constrs_tokens = np.hstack(
+                            (
+                                zero_token,
+                                constrs.ravel(),
+                                stop_token
+                            ))
+
+        clength = len(constrs_tokens)
+
+        # token/node data
+        with open(path, 'rb') as f:
+            tokens = np.load(path)
+            tokens = tokens + 1
+
+            if self.dims == 3:
+                if self.wh:
+                    tokens = tokens[:, [0, 3, 4]]
+                else:
+                    tokens = tokens[:, :3]
+
+            elength = tokens.shape[0]
+
+        #edg data
+        flat_list = []
+        with open(adj_path, 'rb') as f:
+            edg_list = pickle.load(f)  # shift original by 1
+            # print(dict_edg)
+            for sublist in edg_list():
+                flat_list += list(sublist)
+                flat_list += [-1]
+            flat_list = [-2] + flat_list + [-2]  # -2 at beginning and end
+            dlength = len(flat_list)
+
+        # put into proper sequences
+        constr_seq[:clength] = constrs_tokens
+
+        enc_seq = np.ones((self.enc_len, 3), dtype=np.uint8) * (self.vocab_size + 1)
+        enc_seq[0, :] = (0, 0, 0)
+        enc_seq[2:elength+2, :] = tokens
+
+        dec_seq[:dlength] = np.array(flat_list) + 2
+        dec_seq[dec_seq == -2] = 0
+
+        #attention masks
+        constr_attn[clength + 1: ] = 0.0
+        enc_attn[elength + 2:] = 0.0
+        dec_attn[dlength + 1:] = 0.0
+
+        return {'constr_seq': torch.tensor(constr_seq).long(),
+                'enc_seq': torch.tensor(enc_seq).long(),
+                'dec_seq': torch.tensor(dec_seq).long(),
+                'constr_attn':torch.tensor(constr_attn),
+                'enc_attn': torch.tensor(enc_attn),
+                'dec_attn': torch.tensor(dec_attn)}
+
+    def __len__(self):
+        return len(self.file_names)
+
 
 class RrplanGraph(Dataset):
     def __init__(self, root_dir, split=None,
@@ -1491,8 +1797,26 @@ if __name__ == '__main__':
 
     # dset = RplanConditionalGraph(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='v')
     # aa = dset[0]
+    # print(aa)
+
+    # dset = LIFULLConditionalGraph(root_dir='/mnt/iscratch/datasets/lifull_ddg_var', split='train', doors='v')
+    # aa = dset[0]
     # print(dset.file_names[0])
 
-    dset = LIFULLConditionalGraph(root_dir='/mnt/iscratch/datasets/lifull_ddg_var', split='train', doors='v')
-    aa = dset[0]
-    print(dset.file_names[0])
+    # dset = RplanConstrained(root_dir='/mnt/iscratch/datasets/rplan_ddg_var', split='train', doors='v', lifull=False, enc_len=64, dec_len=170)
+    #
+    # # idx = 99
+    # for idx in range(500):
+    #     aa = dset[idx]
+    #     # print(aa)
+    #     print(dset.file_names[idx])
+
+    dset = RplanConstrainedGraph(root_dir='/mnt/iscratch/datasets/lifull_ddg_var',
+                                 split='train', edg_type='v', lifull=True,
+                                constr_len=64, enc_len=64, dec_len=150)
+
+    idx = 99
+    for idx in range(1):
+        aa = dset[idx]
+        print(aa)
+        print(dset.file_names[idx])
