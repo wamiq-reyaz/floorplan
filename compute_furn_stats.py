@@ -10,14 +10,11 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams.update({'figure.max_open_warning': 0}) # to avoid warnings that too many plots are open (apparently this also counts number of open axes)
-# from dataset import load_label_colors, load_egraph
-# from options import import_legacy_train_options
 
-from load_boxes import get_room_sample_names, load_rooms
-# from convert_boxes_to_rooms import convert_boxes_to_rooms
+from furniture_io import get_sample_names, load_furniture
 
 # compute egraph statistics
-def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_types=None):
+def egraph_stats(node_type, nodes, edges, label_count, exclude_types=None):
 
     if node_type is None:
         raise ValueError('Need node type.')
@@ -29,10 +26,14 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
     if nodes is not None:
         stats['center_x'] = []
         stats['center_y'] = []
+        stats['orientation'] = []
         stats['area'] = []
         stats['aspect'] = []
         stats['center_x_dist'] = []
         stats['center_y_dist'] = []
+        stats['w_diff'] = []
+        stats['h_diff'] = []
+        stats['o_diff'] = []
         stats['gap'] = []
         stats['center_align_best'] = []
         stats['center_align_worst'] = []
@@ -44,13 +45,14 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
     if edges is not None:
         stats['neighbor_count_hist'] = []
         stats['neighbor_type_hist'] = []
-        stats['unreachable'] = []
-        stats['exterior_dist'] = []
         stats['type_dist'] = []
 
     if nodes is not None and edges is not None:
         stats['neighbor_center_x_dist'] = []
         stats['neighbor_center_y_dist'] = []
+        stats['neighbor_w_diff'] = []
+        stats['neighbor_h_diff'] = []
+        stats['neighbor_o_diff'] = []
         stats['neighbor_gap'] = []
         stats['neighbor_center_align_best'] = []
         stats['neighbor_center_align_worst'] = []
@@ -70,7 +72,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
 
         # check for empty floor plans
         if nt.size == 0:
-            print('** Warning: skipping a floor plan without rooms. **')
+            print('** Warning: skipping a floor plan without furniture pieces. **')
             continue
 
         # create adjacency matrix from edge list
@@ -87,22 +89,19 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             n = n[include_mask, :] if n is not None else None
             a = a[include_mask, :][:, include_mask] if a is not None else None
 
-        exterior_mask = nt == exterior_type
-
-        if exterior_mask.all():
-            print('** Warning: skipping a floor plan with only exterior. **')
-            continue
-
         if n is not None:
-            min_x = n[:, 0]
-            min_y = n[:, 1]
+            center_x = n[:, 0]
+            center_y = n[:, 1]
             w = n[:, 2]
             h = n[:, 3]
+            o = n[:, 4]
 
+            min_x = center_x - w/2.0
+            min_y = center_y - h/2.0
             max_x = min_x + w
             max_y = min_y + h
-            center_x = min_x + w/2.0
-            center_y = min_y + h/2.0
+        else:
+            min_x, min_y, w, h, o, max_x, max_y, center_x, center_y = None, None, None, None, None, None, None, None, None
 
         if nt is not None:
             type_bin_centers, type_bin_edges = hist_bins_uniform(0, label_count-1, label_count)
@@ -110,14 +109,13 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             stats['type_count'].append({
                 'x': type_bin_centers,
                 'y': np.histogram(nt, bins=type_bin_edges)[0]})
+        else:
+            type_bin_centers, type_bin_edges = None, None
 
         if n is not None:
 
             pair_mask = np.ones([n.shape[0], n.shape[0]], dtype=bool)
             pair_mask[np.tril_indices(pair_mask.shape[0], -1)] = False
-            # exclude exterior from pairs
-            pair_mask[:, exterior_mask] = False
-            pair_mask[exterior_mask, :] = False
             num_pairs = pair_mask.sum()
 
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 63, 21, negative_overflow=True, positive_overflow=True)
@@ -128,6 +126,11 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             stats['center_y'].append({
                 'x': (type_bin_centers, val_bin_centers),
                 'y': np.histogram2d(nt, center_y, bins=[type_bin_edges, val_bin_edges])[0]})
+            
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 36, 21, negative_overflow=True, positive_overflow=True)
+            stats['orientation'].append({
+                'x': (type_bin_centers, val_bin_centers),
+                'y': np.histogram2d(nt, o, bins=[type_bin_edges, val_bin_edges])[0]})
 
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 1000, 21, negative_overflow=True, positive_overflow=True)
             stats['area'].append({
@@ -156,6 +159,28 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             stats['center_y_dist'].append({
                 'x': val_bin_centers,
                 'y': np.histogram(offsets, bins=val_bin_edges)[0] / num_pairs})
+
+            # width and height difference
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 21, negative_overflow=False, positive_overflow=True)
+            diffs = w.reshape(1, -1) - w.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            stats['w_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / num_pairs})
+            diffs = h.reshape(1, -1) - h.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            stats['h_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / num_pairs})
+
+            # orientation difference
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 16, 17, negative_overflow=False, positive_overflow=True)
+            diffs = o.reshape(1, -1) - o.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            diffs[diffs>16] = 32-diffs[diffs>16] # angles wrap around
+            stats['o_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / num_pairs})
 
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
@@ -218,19 +243,6 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 10, 11, negative_overflow=False, positive_overflow=True)
             graph = csg.csgraph_from_dense(a)
             gdists = csg.shortest_path(graph, directed=False, unweighted=True)
-            exterior_inds, = np.nonzero(nt == exterior_type)
-            if exterior_inds.size > 0:
-                exterior_dists = np.min(gdists[exterior_inds, :], axis=0)
-            else:
-                exterior_dists = np.full(shape=[gdists.shape[1]], fill_value=np.inf)
-            unreachable_mask = exterior_dists == np.inf
-            stats['unreachable'].append({
-                'x': type_bin_centers,
-                'y': np.histogram(nt[unreachable_mask], bins=type_bin_edges)[0]})
-            reachable_mask = np.logical_not(unreachable_mask)
-            stats['exterior_dist'].append({
-                'x': (type_bin_centers, val_bin_centers),
-                'y': np.histogram2d(nt[reachable_mask], exterior_dists[reachable_mask], bins=[type_bin_edges, val_bin_edges])[0]})
 
             reachable_mask = gdists != np.inf
             idx1, idx2 = np.nonzero(reachable_mask)
@@ -242,9 +254,6 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
 
             pair_mask = a.copy()
             pair_mask[np.tril_indices(pair_mask.shape[0], -1)] = False
-            # exclude exterior from pairs
-            pair_mask[:, exterior_mask] = False
-            pair_mask[exterior_mask, :] = False
             num_pairs = pair_mask.sum()
 
             # axis-aligned center distance
@@ -259,6 +268,28 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             stats['neighbor_center_y_dist'].append({
                 'x': val_bin_centers,
                 'y': np.histogram(offsets, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
+
+            # width and height difference
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 21, negative_overflow=False, positive_overflow=True)
+            diffs = w.reshape(1, -1) - w.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            stats['neighbor_w_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
+            diffs = h.reshape(1, -1) - h.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            stats['neighbor_h_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
+
+            # orientation difference
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 16, 17, negative_overflow=False, positive_overflow=True)
+            diffs = o.reshape(1, -1) - o.reshape(-1, 1)
+            diffs = np.absolute(diffs[pair_mask])
+            diffs[diffs>16] = 32-diffs[diffs>16] # angles wrap around
+            stats['neighbor_o_diff'].append({
+                'x': val_bin_centers,
+                'y': np.histogram(diffs, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
 
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
@@ -328,7 +359,7 @@ def egraph_set_stats(stats, label_count):
             type_bin_centers, type_bin_edges = hist_bins_uniform(0, label_count-1, label_count)
             val_bin_centers, val_bin_edges = hist_bins_uniform(0, 40, 41, negative_overflow=False, positive_overflow=True)
             _, type_idx = np.indices(stat.shape)
-            # floorplan statistics
+            # furniture layout statistics
             # each histogram is (n_types)
             type_idx = stat_x[type_idx]
 
@@ -339,17 +370,13 @@ def egraph_set_stats(stats, label_count):
             egraph_stats_norm['type_hist'] = {
                 'x': (type_bin_centers, val_bin_centers),
                 'y': stat}
-        elif stat_name == 'unreachable':
-            # floorplan statistics
-            # each histogram is (n_types)
-            egraph_stats_norm[stat_name] = {'x': stat_x, 'y': stat}
-        elif stat_name in ['center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'neighbor_type_hist', 'exterior_dist']:
-            # single room statistics
+        elif stat_name in ['center_x', 'center_y', 'orientation', 'area', 'aspect', 'neighbor_count_hist', 'neighbor_type_hist']:
+            # single furniture statistics
             # each histogram is (n_types x n_value_bins)
-            # weight: mass distribution of the histogram among room types (that is factored out with normalize_histograms)
+            # weight: mass distribution of the histogram among furniture types (that is factored out with normalize_histograms)
 
-            # neighbor_type_hist is the distribution of neighboring room types for each starting room type.
-            # This is normalized to sum up to one per starting room type here (each row in the vis. sums to 1)
+            # neighbor_type_hist is the distribution of neighboring furniture types for each starting furniture type.
+            # This is normalized to sum up to one per starting furniture type here (each row in the vis. sums to 1)
 
             norm_fac = stat.mean(axis=0).sum(axis=1) # normalize by total count per node type (sum over counts in all bins for each type)
             mask = norm_fac > 0
@@ -361,15 +388,15 @@ def egraph_set_stats(stats, label_count):
                 'y': stat,
                 'weight': norm_fac}
         elif stat_name in [
-                'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
+                'center_x_dist', 'center_y_dist', 'w_diff', 'h_diff', 'o_diff', 'gap', 'center_align_best', 'center_align_worst',
                 'side_align_best', 'side_align_second_best', 'side_align_second_worst', 'side_align_worst',
-                'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
+                'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_w_diff', 'neighbor_h_diff', 'neighbor_o_diff', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
                 'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
-            # room pair statistics (have already been normalized over room pairs in each floor plan)
+            # furniture pair statistics (have already been normalized over furniture pairs in each floor plan)
             # each histogram is (n_value_bins)
             egraph_stats_norm[stat_name] = {'x': stat_x, 'y': stat}
         elif stat_name == 'type_dist':
-            # room pair statistics per type
+            # furniture pair statistics per type
             # each histogram is (n_types x n_types x n_distance_bins)
 
             norm_fac = stat.mean(axis=0).sum(axis=2) # normalize by number of pairs for each node type
@@ -441,7 +468,7 @@ def egraph_set_single_stat_dist(stat1, stat2, stat_name):
 
     dist = 0
 
-    if stat_name in ['type_freq', 'unreachable', 'type_dist', 'neighbor_type_hist']:
+    if stat_name in ['type_freq', 'type_dist', 'neighbor_type_hist']:
         dist += ((stat1 - stat2)**2).sum()
     elif stat_name == 'type_hist':
         # max_ind = stat1.shape[1]-1
@@ -456,18 +483,18 @@ def egraph_set_single_stat_dist(stat1, stat2, stat_name):
                     u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1[c, :], v_weights=stat2[c, :])
 
         dist /= stat1.shape[0]
-    elif stat_name in ['center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'exterior_dist']:
+    elif stat_name in ['center_x', 'center_y', 'orientation', 'area', 'aspect', 'neighbor_count_hist']:
         # max_ind = stat1.shape[1]-1
         # stat_x = np.linspace(0, max_ind, max_ind+1)
         stat_x_val = stat_x[1] / (stat_x[1].max() - stat_x[1].min()) # normalized so max. distance between x values is 1
 
         w_total = 0
         for c in range(stat1.shape[0]):
-            # weight: average number of rooms of this type in a floor plan (max. over stat1 and stat2)
+            # weight: average number of furniture pieces of this type in a floor plan (max. over stat1 and stat2)
             # w = max(type_freq1[c], type_freq2[c])
             w = max(stat1_w[c], stat2_w[c])
 
-            # normalize with average room count of the current type
+            # normalize with average furniture count of the current type
             if stat1_w[c] == 0 and stat2_w[c] == 0:
                 # both are 0, this does not add to the distance
                 pass
@@ -492,9 +519,9 @@ def egraph_set_single_stat_dist(stat1, stat2, stat_name):
         else:
             dist = float(dist)
     elif stat_name in [
-            'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
+            'center_x_dist', 'center_y_dist', 'w_diff', 'h_diff', 'o_diff', 'gap', 'center_align_best', 'center_align_worst',
             'side_align_best', 'side_align_second_best', 'side_align_second_worst', 'side_align_worst',
-            'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
+            'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_w_diff', 'neighbor_h_diff', 'neighbor_o_diff', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
             'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
 
         stat_x_val = stat_x / (stat_x.max() - stat_x.min()) # normalized so max. distance between x values is 1
@@ -546,13 +573,11 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
         fake_stat = fake_stat['y']
         real_stat = real_stats[stat_name]['y']
 
-        if stat_name == 'type_freq' or stat_name == 'unreachable':
+        if stat_name == 'type_freq':
             plt.figure()
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 4))
             if stat_name == 'type_freq':
-                title = 'Room type frequency'
-            elif stat_name == 'unreachable':
-                title = 'Unreachable room frequency by type'
+                title = 'Furniture type frequency'
             else:
                 title = 'Unknown'
             fig.suptitle(title)
@@ -575,7 +600,7 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
             if stat_name == 'neighbor_type_hist':
                 title = f'Neighbor type probabilities for a given type (in each row)'
             elif stat_name == 'type_dist':
-                title = f'Average graph distances between room types'
+                title = f'Average graph distances between furniture types'
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
@@ -601,25 +626,25 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
 
             plt.close(fig=fig)
 
-        elif stat_name in ['type_hist', 'center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'exterior_dist']:
+        elif stat_name in ['type_hist', 'center_x', 'center_y', 'orientation', 'area', 'aspect', 'neighbor_count_hist']:
             plt.figure()
             nrows = math.ceil(fake_stat.shape[0]/4.0)
             fig, ax = plt.subplots(nrows=nrows, ncols=4, figsize=(16, nrows*2))
 
             if stat_name == 'type_hist':
-                title = f'Average room type count'
+                title = f'Average furniture type count'
             elif stat_name == 'center_x':
-                title = f'Room type center x distribution'
+                title = f'Furniture type center x distribution'
             elif stat_name == 'center_y':
-                title = f'Room type center y distribution'
+                title = f'Furniture type center y distribution'
+            elif stat_name == 'orientation':
+                title = f'Furniture orientation distribution'
             elif stat_name == 'area':
-                title = f'Room type area distribution'
+                title = f'Furniture type area distribution'
             elif stat_name == 'aspect':
-                title = f'Room type aspect ratio distribution'
+                title = f'Furniture type aspect ratio distribution'
             elif stat_name == 'neighbor_count_hist':
-                title = f'Room type neighbor count distribution'
-            elif stat_name == 'exterior_dist':
-                title = f'Average distance to exterior from room types'
+                title = f'Furniture type neighbor count distribution'
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
@@ -648,50 +673,62 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
             plt.close(fig=fig)
 
         elif stat_name in [
-                'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
+                'center_x_dist', 'center_y_dist', 'w_diff', 'h_diff', 'o_diff', 'gap', 'center_align_best', 'center_align_worst',
                 'side_align_best', 'side_align_second_best', 'side_align_second_worst', 'side_align_worst',
-                'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
+                'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_w_diff', 'neighbor_h_diff', 'neighbor_o_diff', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
                 'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
 
             plt.figure()
             fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 4))
 
             if stat_name == 'center_x_dist':
-                title = f'Distance between center x coordinates for all room pairs'
+                title = f'Distance between center x coordinates for all furniture pairs'
             elif stat_name == 'center_y_dist':
-                title = f'Distance between center y coordinates for all room pairs'
+                title = f'Distance between center y coordinates for all furniture pairs'
+            elif stat_name == 'w_diff':
+                title = f'Difference between widths for all furniture pairs'
+            elif stat_name == 'h_diff':
+                title = f'Difference between heights for all furniture pairs'
+            elif stat_name == 'o_diff':
+                title = f'Difference between orientations for all furniture pairs'
             elif stat_name == 'gap':
-                title = f'Size of the axis-aligned gap between all room pairs'
+                title = f'Size of the axis-aligned gap between all furniture pairs'
             elif stat_name == 'center_align_best':
-                title = f'Deviation from alignment for the most aligned room center coordinate for all room pairs'
+                title = f'Deviation from alignment for the most aligned furniture center coordinate for all furniture pairs'
             elif stat_name == 'center_align_worst':
-                title = f'Deviation from alignment for the least aligned room center coordinate for all room pairs'
+                title = f'Deviation from alignment for the least aligned furniture center coordinate for all furniture pairs'
             elif stat_name == 'side_align_best':
-                title = f'Deviation from alignment for the most aligned room side for all room pairs'
+                title = f'Deviation from alignment for the most aligned furniture side for all furniture pairs'
             elif stat_name == 'side_align_second_best':
-                title = f'Deviation from alignment for the second most aligned room side for all room pairs'
+                title = f'Deviation from alignment for the second most aligned furniture side for all furniture pairs'
             elif stat_name == 'side_align_second_worst':
-                title = f'Deviation from alignment for the second least aligned room side for all room pairs'
+                title = f'Deviation from alignment for the second least aligned furniture side for all furniture pairs'
             elif stat_name == 'side_align_worst':
-                title = f'Deviation from alignment for the least aligned room side for all room pairs'
+                title = f'Deviation from alignment for the least aligned furniture side for all furniture pairs'
             elif stat_name == 'neighbor_center_x_dist':
-                title = f'Distance between center x coordinates for neighboring rooms'
+                title = f'Distance between center x coordinates for neighboring furniture pieces'
             elif stat_name == 'neighbor_center_y_dist':
-                title = f'Distance between center y coordinates for neighboring rooms'
+                title = f'Distance between center y coordinates for neighboring furniture pieces'
+            elif stat_name == 'neighbor_w_diff':
+                title = f'Difference between widths for neighboring furniture pieces'
+            elif stat_name == 'neighbor_h_diff':
+                title = f'Difference between heights for neighboring furniture pieces'
+            elif stat_name == 'neighbor_o_diff':
+                title = f'Difference between orientations for neighboring furniture pieces'
             elif stat_name == 'neighbor_gap':
-                title = f'Size of the axis-aligned gap between neighboring rooms'
+                title = f'Size of the axis-aligned gap between neighboring furniture pieces'
             elif stat_name == 'neighbor_center_align_best':
-                title = f'Deviation from alignment for the most aligned room center coordinate for neighboring rooms'
+                title = f'Deviation from alignment for the most aligned furniture center coordinate for neighboring furniture pieces'
             elif stat_name == 'neighbor_center_align_worst':
-                title = f'Deviation from alignment for the least aligned room center coordinate for neighboring rooms'
+                title = f'Deviation from alignment for the least aligned furniture center coordinate for neighboring furniture pieces'
             elif stat_name == 'neighbor_side_align_best':
-                title = f'Deviation from alignment for the most aligned room side for neighboring rooms'
+                title = f'Deviation from alignment for the most aligned furniture side for neighboring furniture pieces'
             elif stat_name == 'neighbor_side_align_second_best':
-                title = f'Deviation from alignment for the second most aligned room side for neighboring rooms'
+                title = f'Deviation from alignment for the second most aligned furniture side for neighboring furniture pieces'
             elif stat_name == 'neighbor_side_align_second_worst':
-                title = f'Deviation from alignment for the second least aligned room side for neighboring rooms'
+                title = f'Deviation from alignment for the second least aligned furniture side for neighboring furniture pieces'
             elif stat_name == 'neighbor_side_align_worst':
-                title = f'Deviation from alignment for the least aligned room side for neighboring rooms'
+                title = f'Deviation from alignment for the least aligned furniture side for neighboring furniture pieces'
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
@@ -714,11 +751,11 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
 
     # return figs
 
-def compute_egraph_set_stats(out_filename, room_basepath, label_count, exterior_type, exclude_types):
+def compute_egraph_set_stats(out_filename, in_path, label_count, exclude_types):
 
     set_stats = None
 
-    sample_names = get_room_sample_names(base_path=room_basepath)
+    sample_names = get_sample_names(base_path=in_path)
 
     batch_size = 100
     batch_count = math.ceil(len(sample_names) / batch_size)
@@ -727,12 +764,14 @@ def compute_egraph_set_stats(out_filename, room_basepath, label_count, exterior_
         samples_to = min(batch_size*(batch_idx+1), len(sample_names))
         batch_sample_names = sample_names[samples_from:samples_to]
 
-        room_types, room_bboxes, room_door_edges, _, room_idx_map, room_masks, _ = load_rooms(
-            base_path=room_basepath, sample_names=batch_sample_names)
+        _, furn_bboxes, furn_neighbor_edges, _, room_bboxes, _ = load_furniture(
+            base_path=in_path, sample_names=batch_sample_names)
 
         stats = egraph_stats(
-            node_type=room_types, nodes=room_bboxes, edges=room_door_edges,
-            label_count=label_count, exterior_type=exterior_type, exclude_types=exclude_types)
+            node_type=[bboxes[:, 0] for bboxes in furn_bboxes],
+            nodes=[bboxes[:, 1:] for bboxes in furn_bboxes],
+            edges=furn_neighbor_edges,
+            label_count=label_count, exclude_types=exclude_types)
         if set_stats is None:
             set_stats = stats
         else:
@@ -773,14 +812,14 @@ def compute_egraph_set_stat_dists(out_dirname, real_stat_filename=None, fake_sta
             filename=os.path.join(out_dirname, 'vis'))
 
 def save_egraph_set_stat_dists(stat_dists, filename):
-    topology_list = ['type_freq', 'type_hist', 'type_dist', 'neighbor_count_hist', 'neighbor_type_hist', 'unreachable', 'exterior_dist']
+    topology_list = ['type_freq', 'type_hist', 'type_dist', 'neighbor_count_hist', 'neighbor_type_hist']
 
-    spatial_single_list = ['center_x', 'center_y', 'area', 'aspect']
+    spatial_single_list = ['center_x', 'center_y', 'orientation', 'area', 'aspect']
 
     spatial_pair_list = [
-        'center_x_dist', 'center_y_dist', 'gap', 'center_align_best',
+        'center_x_dist', 'center_y_dist', 'w_diff', 'h_diff', 'o_diff', 'gap', 'center_align_best',
         'center_align_worst', 'side_align_best', 'side_align_second_best', 'side_align_second_worst',
-        'side_align_worst', 'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best',
+        'side_align_worst', 'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_w_diff', 'neighbor_h_diff', 'neighbor_o_diff', 'neighbor_gap', 'neighbor_center_align_best',
         'neighbor_center_align_worst', 'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst',
         'neighbor_side_align_worst']
 
@@ -804,105 +843,40 @@ def save_egraph_set_stat_dists(stat_dists, filename):
 
 if __name__ == '__main__':
 
-    from convert_boxes_to_rooms import room_type_names
+    from furniture_io import furn_type_names
 
-    exterior_type = room_type_names.index('Exterior')
-    exclude_types = [room_type_names.index('Wall')]
+    exclude_types = [
+        furn_type_names.index('none'),
+        furn_type_names.index('none2'),
+        furn_type_names.index('walkable'),
+        furn_type_names.index('clutter')]
     compute_stats = True
     compute_stat_distances = True
 
     if compute_stats:
 
         result_sets = [
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'room_basepath': '../data/results/5_tuple_on_rplan_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
-
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_0.9_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_0.9_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'room_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0', 'out_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
-
-            # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'room_basepath': '../data/results/3_tuple_on_lifull_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0', 'out_filename': '../data/results/3_tuple_on_lifull_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # # {'room_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges', 'out_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges/stats.npy'},
-
-            # {'room_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan', 'out_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull', 'out_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
-
-            # {'room_basepath': '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan', 'out_filename': '../data/results/stylegan_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull', 'out_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
-
-            # {'room_basepath': '../data/results/graph2plan_on_rplan_rooms/graph2plan_on_rplan', 'out_filename': '../data/results/graph2plan_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'out_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
-
-            # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
-
-            # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
-
-            {'room_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'out_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
+            {'in_path': '../data/results/furniture/6_tuple_rnngraph/6_tuple', 'out_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
+            {'in_path': '../data/results/furniture/stylegan_rnngraph/stylegan', 'out_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
+            {'in_path': '/home/guerrero/scratch_space/floorplan/gt_rnngraph/gt', 'out_filename': '../data/results/furniture/gt_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
 
-            room_basepath = result_set['room_basepath']
+            in_path = result_set['in_path']
             out_filename = result_set['out_filename']
 
             print(f'result set [{rsi+1}/{len(result_sets)}]: {out_filename}')
 
             compute_egraph_set_stats(
-                out_filename=out_filename, room_basepath=room_basepath, label_count=len(room_type_names), exterior_type=exterior_type, exclude_types=exclude_types)
+                out_filename=out_filename, in_path=in_path, label_count=len(furn_type_names), exclude_types=exclude_types)
 
 
     if compute_stat_distances:
 
         stat_dist_sets = [
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/5_tuple_on_rplan_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_0.9_walls_1.0/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_stats/temp_1.0_doors_1.0_walls_1.0/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_lifull_stats/nodes_0.9_0.9_doors_1.0_walls_1.0/stats.npy'},
-            # # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_on_rplan_stats/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/rplan_on_lifull_stats/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/stylegan_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
-
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
+            {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
+            {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
         ]
 
         for rsi, stat_dist_set in enumerate(stat_dist_sets):
@@ -913,4 +887,4 @@ if __name__ == '__main__':
             print(f'stat distance set [{rsi+1}/{len(stat_dist_sets)}]: {out_dirname}')
 
             compute_egraph_set_stat_dists(
-                out_dirname=out_dirname, real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename, vis=True, label_names=room_type_names)
+                out_dirname=out_dirname, real_stat_filename=real_stat_filename, fake_stat_filename=fake_stat_filename, vis=True, label_names=furn_type_names)

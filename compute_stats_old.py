@@ -1,5 +1,4 @@
 import os
-import copy
 import math
 import numpy as np
 import scipy.sparse.csgraph as csg
@@ -120,7 +119,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
             pair_mask[exterior_mask, :] = False
             num_pairs = pair_mask.sum()
 
-            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 63, 21, negative_overflow=True, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(-25, 25, 21, negative_overflow=True, positive_overflow=True)
 
             stats['center_x'].append({
                 'x': (type_bin_centers, val_bin_centers),
@@ -129,7 +128,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
                 'x': (type_bin_centers, val_bin_centers),
                 'y': np.histogram2d(nt, center_y, bins=[type_bin_edges, val_bin_edges])[0]})
 
-            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 1000, 21, negative_overflow=True, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 60, 21, negative_overflow=True, positive_overflow=True)
             stats['area'].append({
                 'x': (type_bin_centers, val_bin_centers),
                 'y': np.histogram2d(nt, w * h, bins=[type_bin_edges, val_bin_edges])[0]})
@@ -159,7 +158,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
 
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
-            val_bin_centers, val_bin_edges = hist_bins_uniform(-10, 10, 21, negative_overflow=True, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(-20, 20, 21, negative_overflow=True, positive_overflow=True)
             gap_x = np.maximum(
                 min_x.reshape(1, -1) - max_x.reshape(-1, 1),
                 min_x.reshape(-1, 1) - max_x.reshape(1, -1))
@@ -173,7 +172,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
                 'y': np.histogram(gap, bins=val_bin_edges)[0] / num_pairs})
 
             # alignment
-            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 40, 41, negative_overflow=False, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 41, negative_overflow=False, positive_overflow=True)
             dist_center_x = np.absolute((center_x.reshape(1, -1) - center_x.reshape(-1, 1))[pair_mask])
             dist_center_y = np.absolute((center_y.reshape(1, -1) - center_y.reshape(-1, 1))[pair_mask])
             dist_center = np.stack([dist_center_x, dist_center_y])
@@ -262,7 +261,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
 
             # axis-aligned gap
             # (this gap definition contiues shrinking as a smaller object moves into a larger one)
-            val_bin_centers, val_bin_edges = hist_bins_uniform(-10, 10, 21, negative_overflow=True, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(-20, 20, 21, negative_overflow=True, positive_overflow=True)
             gap_x = np.maximum(
                 min_x.reshape(1, -1) - max_x.reshape(-1, 1),
                 min_x.reshape(-1, 1) - max_x.reshape(1, -1))
@@ -276,7 +275,7 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
                 'y': np.histogram(gap, bins=val_bin_edges)[0] / (num_pairs if num_pairs > 0 else 1)})
 
             # alignment
-            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 40, 41, negative_overflow=False, positive_overflow=True)
+            val_bin_centers, val_bin_edges = hist_bins_uniform(0, 20, 41, negative_overflow=False, positive_overflow=True)
             dist_center_x = np.absolute((center_x.reshape(1, -1) - center_x.reshape(-1, 1))[pair_mask])
             dist_center_y = np.absolute((center_y.reshape(1, -1) - center_y.reshape(-1, 1))[pair_mask])
             dist_center = np.stack([dist_center_x, dist_center_y])
@@ -310,19 +309,12 @@ def egraph_stats(node_type, nodes, edges, label_count, exterior_type, exclude_ty
 
 def egraph_set_stats(stats, label_count):
 
-    egraph_stats_norm = {}
-    # normalize set stats given knowledge about the entire set
-    sample_count = None
+    set_stats = {}
     for stat_name, stat in stats.items():
 
         # stack into single ndarray
         stat_x = stat[0]['x'] # all should have the same x
         stat = np.stack([s['y'] for s in stat])
-        if sample_count is None:
-            sample_count = stat.shape[0]
-        else:
-            if stat.shape[0] != sample_count:
-                raise ValueError('Inconsistent sample counts in different stats.')
 
         if stat_name == 'type_count':
             type_bin_centers, type_bin_edges = hist_bins_uniform(0, label_count-1, label_count)
@@ -331,18 +323,14 @@ def egraph_set_stats(stats, label_count):
             # floorplan statistics
             # each histogram is (n_types)
             type_idx = stat_x[type_idx]
-
-            egraph_stats_norm['type_freq'] = {'x': stat_x, 'y': stat}
-
-            stat = np.stack([np.histogram2d(type_idx[i], stat[i], bins=[type_bin_edges, val_bin_edges])[0] for i in range(type_idx.shape[0])])
-
-            egraph_stats_norm['type_hist'] = {
+            set_stats['type_freq'] = {'x': stat_x, 'y': stat.mean(axis=0)}
+            set_stats['type_hist'] = {
                 'x': (type_bin_centers, val_bin_centers),
-                'y': stat}
+                'y': np.histogram2d(type_idx.reshape(-1), stat.reshape(-1), bins=[type_bin_edges, val_bin_edges])[0] / stat.shape[0]}
         elif stat_name == 'unreachable':
             # floorplan statistics
             # each histogram is (n_types)
-            egraph_stats_norm[stat_name] = {'x': stat_x, 'y': stat}
+            set_stats[stat_name] = {'x': stat_x, 'y': stat.mean(axis=0)}
         elif stat_name in ['center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'neighbor_type_hist', 'exterior_dist']:
             # single room statistics
             # each histogram is (n_types x n_value_bins)
@@ -351,14 +339,15 @@ def egraph_set_stats(stats, label_count):
             # neighbor_type_hist is the distribution of neighboring room types for each starting room type.
             # This is normalized to sum up to one per starting room type here (each row in the vis. sums to 1)
 
-            norm_fac = stat.mean(axis=0).sum(axis=1) # normalize by total count per node type (sum over counts in all bins for each type)
+            stat_mean = stat.mean(axis=0) # mean over all egraphs
+            norm_fac = stat_mean.sum(axis=1) # normalize by total count per node type (sum over counts in all bins for each type)
             mask = norm_fac > 0
-            stat[:, mask, :] = stat[:, mask, :] / norm_fac.reshape(1, -1, 1)[:, mask, :] # take average over all distances (from all floor plans) in each type pair
-            stat[:, ~mask, :] = 0
+            stat_mean_norm = np.zeros_like(stat_mean)
+            stat_mean_norm[mask, :] = stat_mean[mask, :] / np.expand_dims(norm_fac, -1)[mask, :]
 
-            egraph_stats_norm[stat_name] = {
+            set_stats[stat_name] = {
                 'x': stat_x,
-                'y': stat,
+                'y': stat_mean_norm,
                 'weight': norm_fac}
         elif stat_name in [
                 'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
@@ -367,46 +356,24 @@ def egraph_set_stats(stats, label_count):
                 'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
             # room pair statistics (have already been normalized over room pairs in each floor plan)
             # each histogram is (n_value_bins)
-            egraph_stats_norm[stat_name] = {'x': stat_x, 'y': stat}
+            set_stats[stat_name] = {'x': stat_x, 'y': stat.mean(axis=0)}
         elif stat_name == 'type_dist':
             # room pair statistics per type
             # each histogram is (n_types x n_types x n_distance_bins)
-
-            norm_fac = stat.mean(axis=0).sum(axis=2) # normalize by number of pairs for each node type
-            stat = (stat * stat_x[2]).sum(axis=-1)
+            stat_sum = stat.sum(axis=0) # sum over all egraphs
+            norm_fac = stat_sum.sum(axis=2) # normalize by number of pairs for each node type
             mask = norm_fac > 0.0001
-            stat[:, mask] = stat[:, mask] / norm_fac[mask] # take average over all distances (from all floor plans) in each type pair
-            stat[:, ~mask] = 0
+            stat_sum_dist = (stat_sum * stat_x[2]).sum(axis=2) # sum all distances in each type pair
+            stat_sum_dist_norm = np.zeros_like(stat_sum_dist)
+            stat_sum_dist_norm[mask] = stat_sum_dist[mask] / norm_fac[mask] # take average over all distances (from all floor plans) in each type pair
 
-            egraph_stats_norm[stat_name] = {
+            set_stats[stat_name] = {
                 'x': stat_x,
-                'y': stat,
+                'y': stat_sum_dist_norm,
                 'weight': norm_fac}
+            # set_stats[stat_name]['y'][mask] = 0 # set entries that have 0 examples from nan to zero
         else:
             raise ValueError(f'Unknown stat: {stat_name}')
-
-    if sample_count < 2:
-        raise ValueError('Must have at least two samples to compute set statistics.')
-
-    set_stats = {}
-    for stat_name, stat in egraph_stats_norm.items():
-
-        # compute average
-        set_stats[stat_name] = {
-            'x': stat['x'],
-            'y': stat['y'].mean(axis=0)} # mean
-        if 'weight' in stat:
-            set_stats[stat_name]['weight'] = stat['weight']
-
-        # compute standard deviation
-        set_stats[stat_name]['std'] = 0
-        for si in range(sample_count):
-           sample_stat = {'x': stat['x'], 'y': stat['y'][si].astype(np.float64)}
-           if 'weight' in stat:
-               sample_stat['weight'] =  stat['weight']
-           # accumulate squared distance between sample and set average
-           set_stats[stat_name]['std'] += egraph_set_single_stat_dist(sample_stat, set_stats[stat_name], stat_name)**2
-        set_stats[stat_name]['std'] = np.sqrt(set_stats[stat_name]['std'] / (sample_count-1))
 
     return set_stats
 
@@ -427,102 +394,112 @@ def hist_bins_uniform(first_center, last_center, count, negative_overflow=False,
 
     return bin_centers, bin_edges
 
-def egraph_set_single_stat_dist(stat1, stat2, stat_name):
+# # normalize multiple histograms of shape nbins x nhists
+# def normalize_histograms(stat):
 
-    stat_x = stat1['x']
-    if 'weight' in stat1:
-        stat1_w = stat1['weight']
-        stat2_w = stat2['weight']
-    else:
-        stat1_w = None
-        stat2_w = None
-    stat1 = stat1['y']
-    stat2 = stat2['y']
+#     hist_sum = stat.sum(axis=1, keepdims=True)
+#     mask = hist_sum[:, 0] > 0
+#     stat[mask, :] /= hist_sum[mask, :]
 
-    dist = 0
+#     return stat
 
-    if stat_name in ['type_freq', 'unreachable', 'type_dist', 'neighbor_type_hist']:
-        dist += ((stat1 - stat2)**2).sum()
-    elif stat_name == 'type_hist':
-        # max_ind = stat1.shape[1]-1
-        # stat_x = np.linspace(0, max_ind, max_ind+1)
-        stat_x_val = stat_x[1] / (stat_x[1].max() - stat_x[1].min()) # normalized so max. distance between x values is 1
+def egraph_set_stat_dists(stats1, stats2):
 
-        for c in range(stat1.shape[0]):
-            if stat1[c, :].sum() <= 0 or stat2[c, :].sum() <= 0:
-                dist += abs(stat2[c, :].sum() - stat1[c, :].sum())
-            else:
-                dist += sps.wasserstein_distance(
-                    u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1[c, :], v_weights=stat2[c, :])
+    # if 'type_freq' not in stats1:
+    #     raise ValueError('Need the type_freq stat.')
 
-        dist /= stat1.shape[0]
-    elif stat_name in ['center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'exterior_dist']:
-        # max_ind = stat1.shape[1]-1
-        # stat_x = np.linspace(0, max_ind, max_ind+1)
-        stat_x_val = stat_x[1] / (stat_x[1].max() - stat_x[1].min()) # normalized so max. distance between x values is 1
-
-        w_total = 0
-        for c in range(stat1.shape[0]):
-            # weight: average number of rooms of this type in a floor plan (max. over stat1 and stat2)
-            # w = max(type_freq1[c], type_freq2[c])
-            w = max(stat1_w[c], stat2_w[c])
-
-            # normalize with average room count of the current type
-            if stat1_w[c] == 0 and stat2_w[c] == 0:
-                # both are 0, this does not add to the distance
-                pass
-            elif stat1_w[c] == 0 or stat2_w[c] == 0:
-                # one of them is 0, add maximum distance of 1
-                w_total += w
-                dist += w
-            # elif stat1[c].sum() == 0 or stat2[c].sum() == 0:
-            #     # one of the distributions is all 0, probably because of , add maximum distance of 1 (weighted as usual)
-            #     w_total += w
-            #     dist += w
-            else:
-                w_total += w
-                if stat1[c, :].sum() <= 0 or stat2[c, :].sum() <= 0:
-                    dist += abs(stat2[c, :].sum() - stat1[c, :].sum())
-                else:
-                    dist += w * sps.wasserstein_distance(
-                        u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1[c, :], v_weights=stat2[c, :])
-
-        if w_total > 0:
-            dist /= w_total
-        else:
-            dist = float(dist)
-    elif stat_name in [
-            'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
-            'side_align_best', 'side_align_second_best', 'side_align_second_worst', 'side_align_worst',
-            'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
-            'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
-
-        stat_x_val = stat_x / (stat_x.max() - stat_x.min()) # normalized so max. distance between x values is 1
-        if stat1.sum() <= 0 or stat2.sum() <= 0:
-            dist += abs(stat2.sum() - stat1.sum())
-        else:
-            dist += sps.wasserstein_distance(
-                u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1, v_weights=stat2)
-    else:
-        raise ValueError(f'Unknown stat: {stat_name}')
-
-    return dist
-
-def egraph_set_stat_dists(stats1, stats2, std_type):
+    # type_freq1 = stats1['type_freq']['y']
+    # type_freq2 = stats2['type_freq']['y']
 
     dists = {}
-    for stat_name in stats1.keys():
-        dists[stat_name] = {
-            'dist': egraph_set_single_stat_dist(stats1[stat_name], stats2[stat_name], stat_name),
-            'std': None}
-        if std_type == 'stat1':
-            dists[stat_name]['std'] = stats1[stat_name]['std']
-        elif std_type == 'stat2':
-            dists[stat_name]['std'] = stats2[stat_name]['std']
-        elif std_type == 'avg':
-            dists[stat_name]['std'] = 0.5 * (stats1[stat_name]['std'] + stats2[stat_name]['std'])
+    for stat_name, stat1 in stats1.items():
+        stat_x = stat1['x']
+        if 'weight' in stat1:
+            stat1_w = stat1['weight']
+            stat2_w = stats2[stat_name]['weight']
         else:
-            raise ValueError(f'Unknown standard deviation type: {std_type}')
+            stat1_w = None
+            stat2_w = None
+        stat1 = stat1['y']
+        stat2 = stats2[stat_name]['y']
+        dists[stat_name] = 0
+
+        if stat_name in ['type_freq', 'unreachable']:
+            dists[stat_name] += ((stat1 - stat2)**2).sum()
+        elif stat_name == 'type_hist':
+            # max_ind = stat1.shape[1]-1
+            # stat_x = np.linspace(0, max_ind, max_ind+1)
+            stat_x_val = stat_x[1] / (stat_x[1].max() - stat_x[1].min()) # normalized so max. distance between x values is 1
+
+            for c in range(stat1.shape[0]):
+                if stat1[c, :].sum() <= 0 or stat2[c, :].sum() <= 0:
+                    dists[stat_name] += abs(stat2[c, :].sum() - stat1[c, :].sum())
+                else:
+                    dists[stat_name] += sps.wasserstein_distance(
+                        u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1[c, :], v_weights=stat2[c, :])
+
+            dists[stat_name] /= stat1.shape[0]
+        elif stat_name in ['type_dist']:
+            dist = (stat1 - stat2)**2
+            # weigh by the minimum, the weight should reflect the realiability of the difference
+            # (if any of the two is low, its value, and thus the difference, is not reliable)
+            # dist = dist * np.minimum(stat1_w, stat2_w) # HERE FOR WEIGHTED
+            dists[stat_name] += dist.sum()
+        elif stat_name in ['neighbor_type_hist']:
+            dist = (stat1 - stat2)**2
+            # weigh by the minimum, the weight should reflect the realiability of the difference
+            # (if any of the two is low, its value, and thus the difference, is not reliable)
+            # dist = dist * np.expand_dims(np.minimum(stat1_w, stat2_w), -1) # HERE FOR WEIGHTED
+            dists[stat_name] += dist.sum()
+        elif stat_name in ['center_x', 'center_y', 'area', 'aspect', 'neighbor_count_hist', 'exterior_dist']:
+            # max_ind = stat1.shape[1]-1
+            # stat_x = np.linspace(0, max_ind, max_ind+1)
+            stat_x_val = stat_x[1] / (stat_x[1].max() - stat_x[1].min()) # normalized so max. distance between x values is 1
+
+            w_total = 0
+            for c in range(stat1.shape[0]):
+                # weight: average number of rooms of this type in a floor plan (max. over stat1 and stat2)
+                # w = max(type_freq1[c], type_freq2[c])
+                w = max(stat1_w[c], stat2_w[c])
+
+                # normalize with average room count of the current type
+                if stat1_w[c] == 0 and stat2_w[c] == 0:
+                    # both are 0, this does not add to the distance
+                    pass
+                elif stat1_w[c] == 0 or stat2_w[c] == 0:
+                    # one of them is 0, add maximum distance of 1
+                    w_total += w
+                    dists[stat_name] += w
+                # elif stat1[c].sum() == 0 or stat2[c].sum() == 0:
+                #     # one of the distributions is all 0, probably because of , add maximum distance of 1 (weighted as usual)
+                #     w_total += w
+                #     dists[stat_name] += w
+                else:
+                    w_total += w
+                    if stat1[c, :].sum() <= 0 or stat2[c, :].sum() <= 0:
+                        dists[stat_name] += abs(stat2[c, :].sum() - stat1[c, :].sum())
+                    else:
+                        dists[stat_name] += w * sps.wasserstein_distance(
+                            u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1[c, :], v_weights=stat2[c, :])
+
+            if w_total > 0:
+                dists[stat_name] /= w_total
+            else:
+                dists[stat_name] = float(dists[stat_name])
+        elif stat_name in [
+                'center_x_dist', 'center_y_dist', 'gap', 'center_align_best', 'center_align_worst',
+                'side_align_best', 'side_align_second_best', 'side_align_second_worst', 'side_align_worst',
+                'neighbor_center_x_dist', 'neighbor_center_y_dist', 'neighbor_gap', 'neighbor_center_align_best', 'neighbor_center_align_worst',
+                'neighbor_side_align_best', 'neighbor_side_align_second_best', 'neighbor_side_align_second_worst', 'neighbor_side_align_worst']:
+
+            stat_x_val = stat_x / (stat_x.max() - stat_x.min()) # normalized so max. distance between x values is 1
+            if stat1.sum() <= 0 or stat2.sum() <= 0:
+                dists[stat_name] += abs(stat2.sum() - stat1.sum())
+            else:
+                dists[stat_name] += sps.wasserstein_distance(
+                    u_values=stat_x_val, v_values=stat_x_val, u_weights=stat1, v_weights=stat2)
+        else:
+            raise ValueError(f'Unknown stat: {stat_name}')
 
     return dists
 
@@ -579,7 +556,7 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
-                title += f' (L2 distance: {stat_dists[stat_name]["dist"]:.8})'
+                title += f' (L2 distance: {stat_dists[stat_name]:.8})'
             fig.suptitle(title)
 
             ax[0].imshow(fake_stat)
@@ -623,7 +600,7 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
-                title += f' (average EM distance: {stat_dists[stat_name]["dist"]:.8})'
+                title += f' (average EM distance: {stat_dists[stat_name]:.8})'
             fig.suptitle(title)
 
             c = 0
@@ -695,7 +672,7 @@ def vis_egraph_set_stat_dists(real_stats, fake_stats, stat_dists, label_names, f
             else:
                 title = f'Unknown'
             if stat_name in stat_dists:
-                title += f' (EM distance: {stat_dists[stat_name]["dist"]:.8})'
+                title += f' (EM distance: {stat_dists[stat_name]:.8})'
             fig.suptitle(title)
 
             ax.bar(x=stat_x, height=fake_stat, alpha=0.5, label='fake', width=(stat_x[1] - stat_x[0]) * 0.8)
@@ -727,7 +704,7 @@ def compute_egraph_set_stats(out_filename, room_basepath, label_count, exterior_
         samples_to = min(batch_size*(batch_idx+1), len(sample_names))
         batch_sample_names = sample_names[samples_from:samples_to]
 
-        room_types, room_bboxes, room_door_edges, _, room_idx_map, room_masks, _ = load_rooms(
+        room_types, room_bboxes, room_door_edges, _, _, _, _ = load_rooms(
             base_path=room_basepath, sample_names=batch_sample_names)
 
         stats = egraph_stats(
@@ -760,7 +737,7 @@ def compute_egraph_set_stat_dists(out_dirname, real_stat_filename=None, fake_sta
     fake_set_stats = load_stats(filename=fake_stat_filename)
     save_stats(filename=os.path.join(out_dirname, 'stats_fake.npy'), stats=fake_set_stats)
 
-    sds = egraph_set_stat_dists(stats1=fake_set_stats, stats2=real_set_stats, std_type='stat2')
+    sds = egraph_set_stat_dists(stats1=fake_set_stats, stats2=real_set_stats)
 
     # save stats distance as npy file and distance summary as text file
     save_stats(filename=os.path.join(out_dirname, 'stat_dists.npy'), stats=sds)
@@ -788,19 +765,19 @@ def save_egraph_set_stat_dists(stat_dists, filename):
         f.write('topology:\n')
         for stat_name in topology_list:
             if stat_name in stat_dists:
-                f.write(f'{stat_name}: {stat_dists[stat_name]["dist"]:.6f}\n')
+                f.write(f'{stat_name}: {stat_dists[stat_name]:.6f}\n')
 
         f.write('\n')
         f.write('spatial single:\n')
         for stat_name in spatial_single_list:
             if stat_name in stat_dists:
-                f.write(f'{stat_name}: {stat_dists[stat_name]["dist"]:.6f}\n')
+                f.write(f'{stat_name}: {stat_dists[stat_name]:.6f}\n')
 
         f.write('\n')
         f.write('spatial pair:\n')
         for stat_name in spatial_pair_list:
             if stat_name in stat_dists:
-                f.write(f'{stat_name}: {stat_dists[stat_name]["dist"]:.6f}\n')
+                f.write(f'{stat_name}: {stat_dists[stat_name]:.6f}\n')
 
 if __name__ == '__main__':
 
@@ -843,20 +820,15 @@ if __name__ == '__main__':
             # {'room_basepath': '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull', 'out_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
 
             # {'room_basepath': '../data/results/graph2plan_on_rplan_rooms/graph2plan_on_rplan', 'out_filename': '../data/results/graph2plan_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'out_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
-
-            # {'room_basepath': '../data/results/3_tuple_cond_on_rplan_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            # {'room_basepath': '../data/results/3_tuple_cond_on_lifull_rooms/nodes_0.9_doors_0.9_walls_0.9', 'out_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
+            {'room_basepath': '../data/results/graph2plan_on_lifull_rooms/graph2plan_on_lifull', 'out_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
 
             # {'room_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan', 'out_filename': '../data/results/gt_on_rplan_stats/stats.npy'},
             # {'room_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull', 'out_filename': '../data/results/gt_on_lifull_stats/stats.npy'},
-
-            {'room_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'out_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
 
-            room_basepath = result_set['room_basepath']
+            room_basepath = result_set['room_basepath'] 
             out_filename = result_set['out_filename']
 
             print(f'result set [{rsi+1}/{len(result_sets)}]: {out_filename}')
@@ -897,12 +869,7 @@ if __name__ == '__main__':
             # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/stylegan_on_lifull_stats/stats.npy'},
 
             # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
-
-            # {'real_stat_filename': '../data/results/gt_on_rplan_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_rplan_stats/stats.npy'},
-            # {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/3_tuple_cond_on_lifull_stats/stats.npy'},
-
-            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/housegan_on_lifull_stats/stats.npy'},
+            {'real_stat_filename': '../data/results/gt_on_lifull_stats/stats.npy', 'fake_stat_filename': '../data/results/graph2plan_on_lifull_stats/stats.npy'},
         ]
 
         for rsi, stat_dist_set in enumerate(stat_dist_sets):

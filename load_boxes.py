@@ -4,9 +4,9 @@ import numpy as np
 import scipy.ndimage
 from skimage.io import imread
 import h5py
-from convert_boxes_to_rooms import room_type_names
+from convert_boxes_to_rooms import room_type_names, mask_bbox
 
-def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list_path=None):
+def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list_path=None, only_boxes=False):
 
     if sample_list_path is not None:
         with open(sample_list_path, 'r') as f:
@@ -47,9 +47,25 @@ def get_box_sample_names(box_dir=None, door_dir=None, wall_dir=None, sample_list
         #             relpath = os.path.relpath(path, start=box_dir)
         #             names.append(os.path.join(relpath if relpath != '.' else '', filename[:-len('.npz')]))
 
+        box_sample_names = []
         for filename in os.listdir(box_dir):
             if os.path.isfile(os.path.join(box_dir, filename)) and (filename.endswith('.npz') or filename.endswith('.npy')):
-                names.append(os.path.join(filename[:-len('.npz')]))
+                box_sample_names.append(os.path.join(filename[:-len('.npz')]))
+
+        if only_boxes:
+            names = sorted(list(set(box_sample_names)))
+        else:
+            door_sample_names = []
+            for filename in os.listdir(door_dir):
+                if os.path.isfile(os.path.join(door_dir, filename)) and filename.endswith('.pkl'):
+                    door_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+
+            wall_sample_names = []
+            for filename in os.listdir(wall_dir):
+                if os.path.isfile(os.path.join(wall_dir, filename)) and filename.endswith('.pkl'):
+                    wall_sample_names.append(os.path.join(filename[:-len('.pkl')]))
+
+            names = sorted(list(set(box_sample_names) & set(door_sample_names) & set(wall_sample_names)))
 
     else:
         # format 2:
@@ -87,7 +103,10 @@ def convert_boxes_to_hdf5(input_dir, output_path, append=False):
     for i, sample_name in enumerate(sample_names):
         boxes_file.create_dataset(sample_name, data=boxes[i])
 
-def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', door_type=2):
+# <<<<<<< HEAD
+# def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', door_type=2):
+# =======
+def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', only_boxes=False):
 
     if wall_dir is None:
         wall_dir = box_dir
@@ -131,17 +150,24 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', d
             modified_names.append(sample_name)
 
             if os.path.exists(os.path.join(box_dir, f'{sample_name}.npz')):
-                boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npz'))['arr_0'])
+                boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npz')))
+                # sometimes the ending is .npz, but its actually an npy file, in that case the type returned is np.ndarray
+                if not isinstance(boxes[-1], np.ndarray):
+                    boxes[-1] = boxes[-1]['arr_0']
             else:
                 boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npy')))
 
-            door_edges_filename = f'{sample_name}.pkl'
-            with open(os.path.join(door_dir, door_edges_filename), 'rb') as f:
-                door_edges.append(np.array(pickle.load(f)))
+            if only_boxes:
+                door_edges.append(np.array([]))
+                wall_edges.append(np.array([]))
+            else:
+                door_edges_filename = f'{sample_name}.pkl'
+                with open(os.path.join(door_dir, door_edges_filename), 'rb') as f:
+                    door_edges.append(np.array(pickle.load(f)))
 
-            wall_edges_filename = f'{sample_name}.pkl'
-            with open(os.path.join(wall_dir, door_edges_filename), 'rb') as f:
-                wall_edges.append(np.array(pickle.load(f)))
+                wall_edges_filename = f'{sample_name}.pkl'
+                with open(os.path.join(wall_dir, door_edges_filename), 'rb') as f:
+                    wall_edges.append(np.array(pickle.load(f)))
 
             if boxes[-1].size == 0:
                 boxes[-1] = np.zeros([0, 5], dtype=np.int64)
@@ -192,9 +218,9 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', d
 
     return boxes, door_edges, wall_edges, modified_names
 
-def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, append=False):
+def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, append=False):
 
-    if any([len(x) != len(sample_names) for x in [room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps]]):
+    if any([len(x) != len(sample_names) for x in [room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks]]):
         raise ValueError('Sample counts do not match.')
 
     os.makedirs(os.path.dirname(base_path), exist_ok=True)
@@ -204,6 +230,7 @@ def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges
     doors_file = h5py.File(base_path+'_room_door_edges.hdf5', 'r+' if append else 'w')
     door_regions_file = h5py.File(base_path+'_room_door_regions.hdf5', 'r+' if append else 'w')
     idx_map_file = h5py.File(base_path+'_room_idx_map.hdf5', 'r+' if append else 'w')
+    masks_file = h5py.File(base_path+'_room_masks.hdf5', 'r+' if append else 'w')
 
     for i, sample_name in enumerate(sample_names):
         types_file.create_dataset(sample_name, data=room_types[i])
@@ -211,6 +238,7 @@ def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges
         doors_file.create_dataset(sample_name, data=room_door_edges[i])
         door_regions_file.create_dataset(sample_name, data=room_door_regions[i])
         idx_map_file.create_dataset(sample_name, data=room_idx_maps[i])
+        masks_file.create_dataset(sample_name, data=room_masks[i])
 
 def save_rooms_npz(base_path, sample_names, room_types, room_bboxes, room_door_edges):
     if any([len(x) != len(sample_names) for x in [room_types, room_bboxes, room_door_edges]]):
@@ -251,18 +279,6 @@ def get_room_sample_names(base_path=None, base_dir=None, sample_list_path=None):
 
     return sample_names
 
-# bbox: xmin, ymin, w, h
-def mask_bbox(mask):
-    if not mask.any():
-        raise ValueError('Mask is empty.')
-    if mask.ndim != 2:
-        raise ValueError('Can only compute bounding box for 2-dimenaional masks.')
-    mask_pix_coords = np.hstack([x.reshape(-1, 1) for x in np.nonzero(mask)])
-    bbmin = mask_pix_coords[:, [1, 0]].min(axis=0)
-    bbmax = mask_pix_coords[:, [1, 0]].max(axis=0)
-    bbsize = (bbmax - bbmin) + 1
-    return np.concatenate([bbmin, bbsize])
-
 def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_names=None):
 
     if sample_names is None:
@@ -272,17 +288,19 @@ def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_name
         # format 0: five hdf5 files, each containing one property of all samples
         types_file = h5py.File(base_path+'_room_types.hdf5', 'r')
         bboxes_file = h5py.File(base_path+'_room_bboxes.hdf5', 'r')
-        idx_map_file = h5py.File(base_path+'_room_idx_map.hdf5', 'r')
         doors_file = h5py.File(base_path+'_room_door_edges.hdf5', 'r')
         door_regions_file = h5py.File(base_path+'_room_door_regions.hdf5', 'r')
+        idx_map_file = h5py.File(base_path+'_room_idx_map.hdf5', 'r')
+        masks_file = h5py.File(base_path+'_room_masks.hdf5', 'r')
 
-        room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps = [], [], [], [], []
+        room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks = [], [], [], [], [], []
         for sample_name in sample_names:
             room_types.append(np.array(types_file[sample_name]))
             room_bboxes.append(np.array(bboxes_file[sample_name]))
             room_door_edges.append(np.array(doors_file[sample_name]))
             room_door_regions.append(np.array(door_regions_file[sample_name]))
             room_idx_maps.append(np.array(idx_map_file[sample_name]))
+            room_masks.append(np.array(masks_file[sample_name]))
     else:
         # format 1: the ddg format, one set of npy files per sample
 
@@ -344,6 +362,7 @@ def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_name
         room_door_edges = []
         room_door_regions = []
         room_idx_maps = []
+        room_masks = []
         for sample_name in sample_names:
             types_bboxes_door_adj = np.load(os.path.join(base_dir, sample_name+'_graph.npy'))
 
@@ -360,13 +379,19 @@ def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_name
             room_door_edges.append(door_edges)
 
             # load room masks, dilate them in one direction only to cover the adjacent walls in one direction, then convert to room index map
-            room_masks = np.load(os.path.join(base_dir, sample_name+'_masks.npy')).transpose(1, 0, 2) > 0.5 # room masks are transposed in the _mask.npy files
+            if os.path.exists(os.path.join(base_dir, sample_name+'_masks.npy')):
+                masks = np.load(os.path.join(base_dir, sample_name+'_masks.npy')).transpose(2, 1, 0) > 0.5 # room masks *are* transposed in the _mask.npy files, and use the last dimension to go over rooms
+            else:
+                with np.load(os.path.join(base_dir, sample_name+'_masks.npz')) as npzfile:
+                    masks = npzfile['masks']
+                masks = masks.transpose(2, 0, 1) > 0.5 # room masks are *not* transposed in the _mask.npz files, use the last dimension to go over rooms
             structelm = np.array([[0, 0, 0], [0, 1, 1], [0, 1, 1]], dtype=np.bool)
-            idx_map = np.full(room_masks.shape[:2], fill_value=labels.index('exterior'))
-            for ri in range(room_masks.shape[-1]):
-                room_masks[:, :, ri] = scipy.ndimage.binary_dilation(input=room_masks[:, :, ri], structure=structelm)
-                idx_map[room_masks[:, :, ri]] = ri
+            idx_map = np.full(masks.shape[1:], fill_value=labels.index('exterior'))
+            for ri in range(masks.shape[0]):
+                masks[ri] = scipy.ndimage.binary_dilation(input=masks[ri], structure=structelm)
+                idx_map[masks[ri]] = ri
             room_idx_maps.append(idx_map)
+            room_masks.append(masks)
 
             bboxes = np.zeros([len(types), 4], dtype=np.int64)
             for room_idx in range(len(types)):
@@ -399,39 +424,95 @@ def load_rooms(base_path=None, base_dir=None, sample_list_path=None, sample_name
                     door_regions[di, :] = mask_bbox(door_region_mask)
             room_door_regions.append(door_regions)
 
-    return room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, sample_names
+    return room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, sample_names
 
 if __name__ == '__main__':
-    # # input_dir = '../../ddg/data/results/stylegan/rplan_var_002_stylegan_baseline'
-    # # output_basepath = '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan'
+    # input_dir = '../../ddg/data/results/stylegan/rplan_var_002_stylegan_baseline'
+    # output_basepath = '../data/results/stylegan_on_rplan_rooms/stylegan_on_rplan'
+    # sample_list_path = None
 
     # input_dir = '../../ddg/data/results/stylegan/lifull_var_002_stylegan_baseline'
     # output_basepath = '../data/results/stylegan_on_lifull_rooms/stylegan_on_lifull'
+    # sample_list_path = None
 
-    # room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, sample_names = load_rooms(base_dir=input_dir)
+    # input_dir = '../data/results/rplan_on_lifull/no_swapped_labels'
+    # output_basepath = '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'
+    # sample_list_path = '../data/results/rplan_on_lifull/no_swapped_labels/all.txt'
+
+    # room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, sample_names = load_rooms(base_dir=input_dir, sample_list_path=sample_list_path)
     # save_rooms(
     #     base_path=output_basepath, sample_names=sample_names,
-    #     room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps)
+    #     room_types=room_types, room_bboxes=room_bboxes, room_door_edges=room_door_edges, room_door_regions=room_door_regions, room_idx_maps=room_idx_maps, room_masks=room_masks)
 
-    
-    # convert boxes
+
+    # convert boxes from a list of npy or npz files to our hdf5 format
     # convert_boxes_to_hdf5(
     #     input_dir='../data/results/3_tuple_on_rplan/temp_0.9_old/nodes_0.9_0.9',
     #     output_path='../data/results/3_tuple_on_rplan/temp_0.9_0.9/nodes_0.9_0.9.hdf5')
 
-    
-    # fix door and edge sample names in the hdf5 files
-    # filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/doors_0.9.hdf5'
-    filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5'
-    with h5py.File(filename, 'r') as h5file:
-        sample_names = []
-        h5file.visititems(lambda name, obj: sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
-        samples = []
-        for sample_name in sample_names:
-            samples.append(np.array(h5file[sample_name]))
-    
-    sample_names = [os.path.basename(name) for name in sample_names]
-    
-    with h5py.File(filename, 'w') as h5file:
-        for i, sample_name in enumerate(sample_names):
-            h5file.create_dataset(sample_name, data=samples[i])
+
+    # # fix door and edge sample names in the hdf5 files
+    # # filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/doors_0.9.hdf5'
+    # filename = '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5'
+    # with h5py.File(filename, 'r') as h5file:
+    #     sample_names = []
+    #     h5file.visititems(lambda name, obj: sample_names.append(name) if isinstance(obj, h5py.Dataset) else None)
+    #     samples = []
+    #     for sample_name in sample_names:
+    #         samples.append(np.array(h5file[sample_name]))
+
+    # sample_names = [os.path.basename(name) for name in sample_names]
+
+    # with h5py.File(filename, 'w') as h5file:
+    #     for i, sample_name in enumerate(sample_names):
+    #         h5file.create_dataset(sample_name, data=samples[i])
+
+
+    # # inspect floorplans
+    # from skimage.io import imsave
+    # room_basepath = '../data/results/5_tuple_on_rplan_rooms/temp_0.9_doors_0.9_walls_0.9'
+    # room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, sample_names = load_rooms(
+    #     base_path=room_basepath, base_dir=None, sample_list_path=None, sample_names=None)
+    # # fp_idx = 0
+    # fp_idx = sample_names.index('2020_10_28__17_59_15logged_39_temp_0.9_0536')
+    # img = room_idx_maps[fp_idx] / (room_idx_maps[fp_idx].max()*1.5)
+    # for room_door_region in room_door_regions[fp_idx]:
+    #     img[
+    #         room_door_region[1]:room_door_region[1]+room_door_region[3]+1,
+    #         room_door_region[0]:room_door_region[0]+room_door_region[2]+1] = 1
+    # imsave('/home/guerrero/scratch_space/floorplan/test.png', (img*255.0).astype(np.uint8))
+    # print('bla')
+
+
+    # merge two sets of door and wall samples into one set with twice as many samples (need to rename samples and duplicate the nodes)
+    import shutil
+    from tqdm import tqdm
+    node_dir1 = '../data/results/3_tuple_cond_on_rplan/nodes_0.9'
+    node_dir2 = '../data/results/3_tuple_cond_on_rplan/nodes_0.9'
+    door_dir1 = '../data/results/3_tuple_cond_on_rplan/doors_0.9'
+    door_dir2 = '../data/results/3_tuple_cond_on_rplan/doors_0.9_v2'
+    wall_dir1 = '../data/results/3_tuple_cond_on_rplan/walls_0.9'
+    wall_dir2 = '../data/results/3_tuple_cond_on_rplan/walls_0.9_v2'
+    node_dir_tgt = '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged'
+    door_dir_tgt = '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged'
+    wall_dir_tgt = '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged'
+    add_suffix = '_2'
+
+    os.makedirs(node_dir_tgt, exist_ok=True)
+    os.makedirs(door_dir_tgt, exist_ok=True)
+    os.makedirs(wall_dir_tgt, exist_ok=True)
+
+    sample_names = []
+    for fn in os.listdir(node_dir1):
+        if fn.endswith('.npz'):
+            sample_names.append(fn[:-len('.npz')])
+
+    for sample_name in tqdm(sample_names):
+        shutil.copyfile(os.path.join(node_dir1, sample_name+'.npz'), os.path.join(node_dir_tgt, sample_name+'.npz'))
+        shutil.copyfile(os.path.join(node_dir2, sample_name+'.npz'), os.path.join(node_dir_tgt, sample_name+add_suffix+'.npz'))
+
+        shutil.copyfile(os.path.join(door_dir1, sample_name+'.pkl'), os.path.join(door_dir_tgt, sample_name+'.pkl'))
+        shutil.copyfile(os.path.join(door_dir2, sample_name+'.pkl'), os.path.join(door_dir_tgt, sample_name+add_suffix+'.pkl'))
+
+        shutil.copyfile(os.path.join(wall_dir1, sample_name+'.pkl'), os.path.join(wall_dir_tgt, sample_name+'.pkl'))
+        shutil.copyfile(os.path.join(wall_dir2, sample_name+'.pkl'), os.path.join(wall_dir_tgt, sample_name+add_suffix+'.pkl'))
