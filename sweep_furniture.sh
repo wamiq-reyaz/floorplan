@@ -4,14 +4,14 @@
 #SBATCH --export=ALL,NCCL_SOCKET_IFNAME=eth0
 #SBATCH --partition=batch
 #SBATCH -J furn_nodes
-#SBATCH --cores-per-socket=5
 #SBATCH -o slurm/%A_%a.out
 #SBATCH -e slurm/%A_%a.err
 #SBATCH --time=10:00:00
 #SBATCH --mem=24G
-#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=10
-#SBATCH --gres=gpu:v100
+#SBATCH --gres=gpu:v100:4
+#SBATCH -A conf-iccv-2021.03.25-wonkap
+#SBATCH --qos=conf-iccv-2021.03.25
 
 conda activate faclab
 
@@ -24,4 +24,7 @@ conda activate faclab
 
 # wandb agent wamreyaz/furniture_adj/pq6hmmbb # adj adj
 
-wandb agent wamreyaz/furniture_adj/n5q39ssq # adj object
+#wandb agent wamreyaz/furniture_adj/n5q39ssq # adj object
+
+#wandb agent wamreyaz/furniture_nodes_suppl/kyfr41qn
+wandb agent wamreyaz/furniture_nodes_suppl/96njf9mv

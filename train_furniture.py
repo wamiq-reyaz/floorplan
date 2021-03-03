@@ -78,11 +78,11 @@ if __name__ == '__main__':
 
 
 
-    dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True)
+    dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=, drop_last=True)
 
 
 
-    val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True, drop_last=True)
     args.passthrough=False
 
 
@@ -145,11 +145,6 @@ if __name__ == '__main__':
             attn_mask = data['attn_mask']
             pos_id = data['pos_id']
 
-            # print(seq[0])
-            # print(pos_id[0])
-            # print(attn_mask[0])
-            # sys.exit()
-
             loss = model(input_ids=seq,
                          attention_mask=attn_mask,
                          position_ids=pos_id,
@@ -158,10 +153,7 @@ if __name__ == '__main__':
             loss[0].mean().backward()
 
             optimizer.step()
-            # lr_scheduler.step()
 
-            # if steps % 100 == 0:
-            # writer.add_scalar('loss/train', loss[0].mean(), global_step=global_steps)
             wandb.log({'loss/train': loss[0].mean()}, step=global_steps)
 
         torch.save(model.state_dict(), SAVE_LOCATION + f'model_furniture.pth')

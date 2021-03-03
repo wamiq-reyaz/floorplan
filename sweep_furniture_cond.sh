@@ -9,7 +9,6 @@
 #SBATCH -e slurm/%A_%a.err
 #SBATCH --time=10:00:00
 #SBATCH --mem=24G
-#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:v100
 #SBATCH -A conf-gpu-2020.11.23
