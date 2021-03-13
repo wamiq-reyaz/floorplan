@@ -33,6 +33,7 @@ if __name__ == '__main__':
     print('ullalala')
 
     BATCH_SIZE = 2
+    # point to folder of triples
     dset = RrplanNPZTriples(root_dir=f'/home/parawr/Projects/floorplan/samples/{parser.samples}',
                  seq_len=120,
                  edg_len=100,
@@ -121,8 +122,8 @@ if __name__ == '__main__':
 
                 next_token = torch.multinomial(probs, num_samples=1)
 
-                if ii == 4:
-                    sys.exit()
+                # if ii == 4:
+                #     sys.exit()
 
 
 
@@ -142,10 +143,10 @@ if __name__ == '__main__':
         import networkx as nx
         from networkx.drawing.nx_agraph import write_dot
 
-        graph = nx.DiGraph()
-        graph.add_edges_from(parse_edge_seq(samples[-1]))
-        write_dot(graph, 'vert.dot')
-        sys.exit()
+        # graph = nx.DiGraph()
+        # graph.add_edges_from(parse_edge_seq(samples[-1]))
+        # write_dot(graph, 'vert.dot')
+        # sys.exit()
 
         SAVE_DIR = os.path.join('samples', parser.samples, 'edges', f'{parser.kind}_{parser.temp:0.1f}')
         if not os.path.exists(SAVE_DIR):

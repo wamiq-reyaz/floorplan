@@ -103,9 +103,9 @@ if __name__ == '__main__':
     val_loader = DataLoader(val_set, batch_size=64, num_workers=10)
 
     config = GPT2Config(
-        vocab_size=65,
-        n_positions=120,
-        n_ctx=120,
+        vocab_size=args.vocab,#65,
+        n_positions=args.seq_len,#120,
+        n_ctx=args.seq_len,#120,
         n_embd=args.dim,
         n_layer=args.enc_layer,
         n_head=12,

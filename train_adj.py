@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument("--root_dir", default=".", type=str, help="Root folder to save data in")
     parser.add_argument("--datapath", default='.', type=str, help="Root folder to save data in")
     parser.add_argument('--lifull', default=False, type=bool)
-    parser.add_argument('--separate', default=False, type=bool)
+    parser.add_argument('--separate', default=True, type=bool)
 
     # Notes
     parser.add_argument("--notes", default='', type=str, help="Wandb notes")
