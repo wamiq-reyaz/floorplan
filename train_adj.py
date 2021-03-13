@@ -191,6 +191,7 @@ if __name__ == '__main__':
                          labels=edg_seq,
                          vert_attn_mask=vert_attn_mask)
 
+            # print(loss)
             loss[0].mean().backward()
 
             optimizer.step()

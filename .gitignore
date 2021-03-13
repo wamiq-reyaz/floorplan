@@ -1,5 +1,6 @@
 __pycache__
 # artifact files
+*.npy
 *.pth
 *.png
 *.zip
@@ -19,3 +20,11 @@ models/
 .models/
 doors/
 .ipynb_checkpoints
+
+# hastily generated data
+floorplan_suppl*
+floorplan_nodes*
+floorplan_living*
+
+cond_lifull*
+cond_rplan*

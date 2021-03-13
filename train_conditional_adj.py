@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--id_embed', default=False, type=int, help='Separate embedding for the id')
     parser.add_argument('--adj', default='h', type=str, help='h/v/all doors')
     parser.add_argument('--passthrough', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
-    parser.add_argument('--wh', default=False, type=int, help='Whether to have transfoermer layers in encoder')
+    parser.add_argument('--wh', default=False, type=bool, help='Whether to have transfoermer layers in encoder')
     parser.add_argument('--flipped', default=False, type=bool, help='Whether the decoder/encoder are flipped')
 
 
@@ -131,7 +131,6 @@ if __name__ == '__main__':
 
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
-    args.passthrough=True
 
 
     enc = GPT2Config(
@@ -203,6 +202,7 @@ if __name__ == '__main__':
         for steps, data in tqdm(enumerate(dloader)):
             global_steps += 1
             optimizer.zero_grad()
+
             vert_seq = data['vert_seq'].cuda()
             edg_seq = data['edg_seq'].cuda()
             attn_mask = data['attn_mask'].cuda()
@@ -216,6 +216,8 @@ if __name__ == '__main__':
                           vert_attn_mask=vert_attn_mask)
 
             loss[0].mean().backward()
+            print(loss)
+            sys.exit()
 
             optimizer.step()
             # lr_scheduler.step()

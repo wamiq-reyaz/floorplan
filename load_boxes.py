@@ -103,6 +103,9 @@ def convert_boxes_to_hdf5(input_dir, output_path, append=False):
     for i, sample_name in enumerate(sample_names):
         boxes_file.create_dataset(sample_name, data=boxes[i])
 
+# <<<<<<< HEAD
+# def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', door_type=2):
+# =======
 def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', only_boxes=False):
 
     if wall_dir is None:
@@ -113,6 +116,7 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
     boxes = []
     door_edges = []
     wall_edges = []
+    modified_names = []
     if box_dir.endswith('.hdf5'):
         # format 0:
         # three hdf5 files, one for boxes, one for door edges, one for wall edges
@@ -121,6 +125,8 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
         doors_file = h5py.File(door_dir, 'r')
         walls_file = h5py.File(wall_dir, 'r')
         for sample_name in sample_names:
+            modified_names.append(sample_name)
+
             boxes.append(np.array(boxes_file[sample_name]))
             door_edges.append(np.array(doors_file[sample_name]))
             wall_edges.append(np.array(walls_file[sample_name]))
@@ -141,6 +147,8 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
         # wall edges: (.pkl)
 
         for sample_name in sample_names:
+            modified_names.append(sample_name)
+
             if os.path.exists(os.path.join(box_dir, f'{sample_name}.npz')):
                 boxes.append(np.load(os.path.join(box_dir, f'{sample_name}.npz')))
                 # sometimes the ending is .npz, but its actually an npy file, in that case the type returned is np.ndarray
@@ -175,16 +183,30 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
         # door edges: doorlist_all.pkl
         # wall edges: walllist_all.pkl (not starting with underscore)
 
+
         for sample_name in sample_names:
 
-            boxes.append(np.load(os.path.join(box_dir, f'{sample_name}{suffix}_xyhw.npy')))
+            box_file_name = os.path.join(box_dir, f'{sample_name}{suffix}_xyhw.npy')
 
-            door_edges_filename = f'{sample_name}{suffix}_doorlist_all.pkl'
-            with open(os.path.join(box_dir, door_edges_filename), 'rb') as f:
+            door_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}_doorlist_all.pkl')
+            if door_type == 2:
+                door_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}_doorlist_all2.pkl')
+
+            wall_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}walllist_all.pkl')
+
+            all_three_exist = os.path.exists(box_file_name) and os.path.exists(door_edges_filename) and os.path.exists(wall_edges_filename)
+
+            if not all_three_exist:
+                continue
+
+            modified_names.append(sample_name)
+            boxes.append(np.load(box_file_name))
+
+            with open(door_edges_filename, 'rb') as f:
                 door_edges.append(np.array(pickle.load(f)))
 
-            wall_edges_filename = f'{sample_name}{suffix}walllist_all.pkl'
-            with open(os.path.join(box_dir, wall_edges_filename), 'rb') as f:
+
+            with open(wall_edges_filename, 'rb') as f:
                 wall_edges.append(np.array(pickle.load(f)))
 
             if boxes[-1].size == 0:
@@ -194,7 +216,7 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
             if wall_edges[-1].size == 0:
                 wall_edges[-1] = np.zeros([0, 2], dtype=np.int64)
 
-    return boxes, door_edges, wall_edges, sample_names
+    return boxes, door_edges, wall_edges, modified_names
 
 def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, append=False):
 
@@ -217,6 +239,20 @@ def save_rooms(base_path, sample_names, room_types, room_bboxes, room_door_edges
         door_regions_file.create_dataset(sample_name, data=room_door_regions[i])
         idx_map_file.create_dataset(sample_name, data=room_idx_maps[i])
         masks_file.create_dataset(sample_name, data=room_masks[i])
+
+def save_rooms_npz(base_path, sample_names, room_types, room_bboxes, room_door_edges):
+    if any([len(x) != len(sample_names) for x in [room_types, room_bboxes, room_door_edges]]):
+        print(sample_names)
+        raise ValueError('Sample counts do not match.')
+
+    os.makedirs(os.path.dirname(base_path), exist_ok=True)
+
+
+    for ii, sample_name in enumerate(sample_names):
+        os.makedirs(os.path.join(base_path, sample_name))
+        np.savez(os.path.join(base_path, sample_name +'_room_types.npz'), room_types[ii])
+        np.savez(os.path.join(base_path, sample_name +'_room_bboxes.npz'), room_bboxes[ii])
+        np.savez(os.path.join(base_path, sample_name +'_room_door_edges.npz'), room_door_edges[ii])
 
 def get_room_sample_names(base_path=None, base_dir=None, sample_list_path=None):
 

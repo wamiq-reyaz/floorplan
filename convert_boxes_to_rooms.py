@@ -1,3 +1,4 @@
+import sys
 import math
 from itertools import chain
 import numpy as np
@@ -52,7 +53,12 @@ def mask_bbox(mask):
 # room_door_edges: (from_idx, to_idx) - N_room_doors x 2
 # room_door_regions: (min_x, min_y, w, h) - N_room_doors x 4
 # room_idx_map: room index for each pixel - img_res_y x img_res_x
+# <<<<<<< HEAD
+
+# def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_count):
+# =======
 def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_count, coord_type, add_exterior):
+# >>>>>>> refs/remotes/origin/main
 
     exterior_type_idx = room_type_names.index('Exterior')
     
@@ -276,7 +282,7 @@ def convert_boxes_to_rooms(boxes, door_edges, wall_edges, img_res, room_type_cou
 
 if __name__ == '__main__':
     import os
-    from load_boxes import get_box_sample_names, load_boxes, save_rooms
+    from load_boxes import get_box_sample_names, load_boxes, save_rooms, save_rooms_npz
     from convert_boxes_to_rooms import convert_boxes_to_rooms, room_type_colors
     from tqdm import tqdm
 
@@ -299,9 +305,13 @@ if __name__ == '__main__':
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_0.9', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_0.9.txt', 'output_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_0.9'},
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0', 'door_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/doors_1.0', 'wall_dir': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/walls_1.0', 'sample_list': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull/temp_1.0/test_doors_1.0_walls_1.0.txt', 'output_basepath': '/home/guerrero/scratch_space/floorplan/results/5_tuple_on_lifull_rooms/temp_1.0_doors_1.0_walls_1.0'},
         
+# <<<<<<< HEAD
+        # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/nodes_0.9_0.9.hdf5', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/doors_0.9.hdf5', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9'},
+# =======
         # # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9/doors_0.9', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9/walls_0.9', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9', 'coord_type': 'normalized'},
         # {'box_dir': '../data/results/3_tuple_on_lifull/temp_0.9/nodes_0.9_0.9', 'door_dir': '../data/results/3_tuple_on_lifull/temp_0.9/doors/_1.0', 'wall_dir': '../data/results/3_tuple_on_lifull/temp_0.9/walls/_1.0', 'sample_list': '../data/results/3_tuple_on_lifull/temp_0.9/test_doors_1.0_walls_1.0.txt', 'output_basepath': '../data/results/3_tuple_on_lifull_rooms/nodes_0.9_0.9_doors_1.0_walls_1.0'},
         # # {'box_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/nodes_0.9_0.9.hdf5', 'door_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/doors_0.9.hdf5', 'wall_dir': '../data/results/3_tuple_on_rplan/temp_0.9_0.9/walls_0.9.hdf5', 'sample_list': '../data/results/3_tuple_on_rplan/temp_0.9_0.9_post_edges/test_doors_0.9_walls_0.9.txt', 'output_basepath': '../data/results/3_tuple_on_rplan_rooms/nodes_0.9_0.9_doors_0.9_walls_0.9_post_edges'},
+# >>>>>>> refs/remotes/origin/main
 
         # {'box_dir': '../data/results/rplan_on_rplan', 'sample_list': '../data/results/rplan_on_rplan/all.txt', 'output_basepath': '../data/results/rplan_on_rplan_rooms/rplan_on_rplan'},
         # {'box_dir': '../data/results/rplan_on_lifull', 'sample_list': '../data/results/rplan_on_lifull/all.txt', 'output_basepath': '../data/results/rplan_on_lifull_rooms/rplan_on_lifull'},
@@ -312,11 +322,37 @@ if __name__ == '__main__':
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/rplan_ddg_var/test.txt', 'suffix': '_image_nodoor', 'output_basepath': '../data/results/gt_on_rplan_rooms/gt_on_rplan'},
         # {'box_dir': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var', 'sample_list': '/home/guerrero/scratch_space/floorplan/lifull_ddg_var/test.txt', 'suffix': '', 'output_basepath': '../data/results/gt_on_lifull_rooms/gt_on_lifull'},
 
+# <<<<<<< HEAD
+        {'box_dir': '/mnt/iscratch/datasets/rplan_ddg_var/',
+         'sample_list': '/mnt/iscratch/datasets/rplan_ddg_var/all.txt',
+         'output_basepath': '/home/parawr/Projects/floorplan/rplan_adj_v5/',
+         'suffix': '_image_nodoor',
+         'door_type': 2},
+
+        # {'box_dir': '/ibex/scratch/parawr/datasets/rplan_ddg_var/',
+        #  'sample_list': '/ibex/scratch/parawr/datasets/rplan_ddg_var/all.txt',
+        #  'output_basepath':  '/home/parawr/Projects/floorplan/rplan_adj/',
+        #  'suffix': '_image_nodoor',
+        #  'door_type': 2},
+
+        # {'box_dir': '/mnt/iscratch/datasets/lifull_ddg_var/',
+        #  'sample_list': '/mnt/iscratch/datasets/lifull_ddg_var/all.txt',
+        #  'output_basepath': '/home/parawr/Projects/floorplan/lifull_adj',
+        #  'suffix': '',
+        #  'door_type': 1}
+
+        # {'box_dir': '/ibex/scratch/parawr/datasets/lifull_ddg_var/',
+        #  'sample_list': '/ibex/scratch/parawr/lifull_ddg_var/all.txt',
+        #  'output_basepath': '/home/parawr/Projects/floorplan/lifull/',
+        #  'suffix': '',
+        #  'door_type': 1}
+
+# =======
         {'box_dir': '../data/results/housegan_on_lifull/boxes', 'door_dir': '../data/results/housegan_on_lifull/doors', 'wall_dir': '../data/results/housegan_on_lifull/walls', 'sample_list': '../data/results/housegan_on_lifull/all.txt', 'output_basepath': '../data/results/housegan_on_lifull_rooms/housegan_on_lifull', 'add_exterior': True, 'only_boxes': True,  'coord_type': 'absolute_minmax_corner'},
+# >>>>>>> refs/remotes/origin/main
     ]
 
     for rsi, result_set in enumerate(result_sets):
-
         box_dir = result_set['box_dir']
         door_dir = result_set['door_dir'] if 'door_dir' in result_set else None
         wall_dir = result_set['wall_dir'] if 'wall_dir' in result_set else None
@@ -326,6 +362,7 @@ if __name__ == '__main__':
         add_exterior = result_set['add_exterior'] if 'add_exterior' in result_set else False
         only_boxes = result_set['only_boxes'] if 'only_boxes' in result_set else False
         output_basepath = result_set['output_basepath']
+        door_type = result_set['door_type'] if 'door_type' in result_set else 1
 
         print(f'result set [{rsi+1}/{len(result_sets)}]: {output_basepath}')
 
@@ -333,6 +370,7 @@ if __name__ == '__main__':
         sample_names = get_box_sample_names(box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, sample_list_path=sample_list, only_boxes=only_boxes)
 
         os.makedirs(os.path.dirname(output_basepath), exist_ok=True)
+        print(os.path.dirname(output_basepath))
 
         total_overlap_count = 0
         batch_count = 0
@@ -345,16 +383,23 @@ if __name__ == '__main__':
             samples_to = min(batch_size*(batch_idx+1), len(sample_names))
             batch_sample_names = sample_names[samples_from:samples_to]
             
+# <<<<<<< HEAD
+#             boxes, door_edges, wall_edges, batch_sample_names = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix, door_type=door_type)
+# =======
             boxes, door_edges, wall_edges, _ = load_boxes(sample_names=batch_sample_names, box_dir=box_dir, door_dir=door_dir, wall_dir=wall_dir, suffix=suffix, only_boxes=only_boxes)
+# >>>>>>> refs/remotes/origin/main
 
             room_types, room_bboxes, room_door_edges, room_door_regions, room_idx_maps, room_masks, overlap_count = convert_boxes_to_rooms(
                 boxes=boxes, door_edges=door_edges, wall_edges=wall_edges, img_res=(64, 64), room_type_count=len(room_type_names), coord_type=coord_type, add_exterior=add_exterior)
             total_overlap_count += overlap_count
 
-            save_rooms(
+
+            # print(batch_sample_names)
+            # sys.exit()
+            save_rooms_npz(
                 base_path=output_basepath, sample_names=batch_sample_names,
                 room_types=room_types,
-                room_bboxes=room_bboxes,
+
                 room_door_edges=room_door_edges,
                 room_door_regions=room_door_regions,
                 room_idx_maps=room_idx_maps,
@@ -362,3 +407,4 @@ if __name__ == '__main__':
                 append=batch_idx > 0)
 
         print(f'Average number of overlapping pixels between rooms: {total_overlap_count / len(sample_names)}')
+# >>>>>>> refs/remotes/origin/main

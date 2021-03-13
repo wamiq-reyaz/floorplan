@@ -12,8 +12,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --gres=gpu:v100
-#SBATCH -A conf-gpu-2020.11.23
+#####SBATCH -A conf-gpu-2020.11.23
 
 conda activate faclab
 
-python train_conditional.py --tuples 3 --dec_layer=8 --dim=384 --enc_layer=14 --gamma=0.11434722057408568 --lr=0.00034348760750300126
+python train_conditional.py --tuples 3 --dec_layer=12 --dim=384 --enc_layer=6 --gamma=0.11434722057408568 --lr=0.00034348760750300126

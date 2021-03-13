@@ -65,9 +65,9 @@ if __name__ == '__main__':
 
 
     # IMG_PATH = f'/mnt/iscratch/datasets/lifull_ddg_var/00/4c/9a1eb46e36a83c365331a05143eb/'
-    # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/292/74931_0"/mnt/iscratch/datasets/lifull_ddg_var/09/34/9d192877f550aeb9280c55b30f81/0001_
+    # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/153/39272_0"
     IMG_PATH = "/mnt/iscratch/datasets/lifull_ddg_var/09/34/9d192877f550aeb9280c55b30f81/0001"
-
+    #
     #
     # IMG_PATH = "/mnt/iscratch/datasets/rplan_ddg_var/143/36861_0_image_nodoor.png"
     # #This one has stggered
@@ -126,6 +126,7 @@ if __name__ == '__main__':
     st._merge_small_boxes(cross_wall=False)
     st._merge_vert_boxes(cross_wall=False)
     f, ax = st.show_boxes('merged')
+    print(st.get_door_constraints())
     # plt.savefig(f'{idx}_no_cross_wall.png', dpi=160)
     plt.show(False)
     import networkx as nx

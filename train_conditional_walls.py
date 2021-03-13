@@ -127,7 +127,7 @@ if __name__ == '__main__':
 
 
     val_loader = DataLoader(val_set, batch_size=args.bs, num_workers=10, shuffle=True)
-    args.passthrough=True
+    # args.passthrough=True
 
     if args.flipped:
         enc_is_causal=True

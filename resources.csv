@@ -1,0 +1,4 @@
+w	/mnt/iscratch/floorplan/models/furniture_adj_w/GraphGPT-22-Nov_12-23----adj_w-bs64-lr0.00018-enl8-decl12-dim_embed192-dd422607-d278-4beb-9dcd-07d80a0c70fa
+h	/mnt/iscratch/floorplan/models/furniture_adj_h/GraphGPT-21-Nov_22-39----adj_h-bs96-lr0.00009-enl12-decl12-dim_embed192-1350dc4d-52c9-462b-83ff-f894e84a1065
+a	/mnt/iscratch/floorplan/models/furniture_adj_a/GraphGPT-22-Nov_23-44----adj_a-bs96-lr0.00014-enl8-decl12-dim_embed264-d874a9a1-a17e-46b5-9f43-0ee4e8620c88
+o	/mnt/iscratch/floorplan/models/furniture_adj_o/GraphGPT-23-Nov_08-44----adj_o-bs96-lr0.00018-enl8-decl12-dim_embed144-18787703-9fb5-49fd-9c70-231caf55abea

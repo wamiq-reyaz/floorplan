@@ -609,6 +609,7 @@ class GPT2Encoder(nn.Module):
 
         if inputs_embeds.dim() == 4:
             print(inputs_embeds.shape)
+            print('yello')
             inputs_embeds = inputs_embeds.sum(dim=-2)
 
 
@@ -625,7 +626,10 @@ class GPT2Encoder(nn.Module):
                 type_ids = torch.arange(n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs, 1) % self.config.n_types
             # print(pos_tokens.shape)
             pos_embeds = self.pde(position_ids)
-            type_embeds = self.wtte(type_ids)
+            if self.config.separate:
+                type_embeds = 0
+            else:
+                type_embeds = self.wtte(type_ids)
             inputs_embeds = inputs_embeds + pos_embeds + type_embeds
 
         hidden_states = inputs_embeds
@@ -784,6 +788,7 @@ class GPT2Decoder(nn.Module):
             device = input_ids.device if input_ids is not None else inputs_embeds.device
             position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=device)
             position_ids = position_ids.unsqueeze(0).view(-1, input_shape[-1])
+            # print(position_ids.shape)
 
         # Attention mask.
         if attention_mask is not None:
@@ -869,6 +874,8 @@ class GPT2ConditionalDecoder(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
+
+
 
         self.wte = nn.Embedding(config.vocab_size+2, config.n_embd)
         self.wtte = nn.Embedding(config.n_types, config.n_embd)
@@ -1018,6 +1025,205 @@ class GPT2ConditionalDecoder(nn.Module):
 
         return (hidden_states, )
 
+
+class GPT2ConditionalEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.config = config
+
+        if self.config.separate:
+            self.wte = nn.ModuleList([nn.Embedding(config.vocab_size + 2, config.n_embd) for _ in
+                                      range(self.config.n_types)])
+        else:
+            self.wte = nn.Embedding(config.vocab_size + 2, config.n_embd)
+
+        self.drop = nn.Dropout(config.embd_pdrop)
+        self.h = nn.ModuleList([CrossAttnBlock(config.n_ctx, config, scale=True) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+        self.lm_head = nn.Linear(config.n_embd, config.n_embd)
+
+        try:
+            self.id_embed = self.config.id_embed
+        except:
+            self.id_embed = False
+
+        try:
+            self.pos_id = self.config.use_pos_emb
+        except:
+            self.pos_id = False
+
+        try:
+            self.passthrough = self.config.passthrough
+        except:
+            self.passthrough = False
+
+        if self.id_embed:
+            self.ide = nn.Embedding(config.vocab_size+2, config.n_embd)
+
+        if self.pos_id:
+            self.pde = nn.Embedding(config.n_ctx, config.n_embd)
+            self.wtte = nn.Embedding(config.n_types, config.n_embd)
+
+        self.init_weights()
+
+    def init_weights(self):
+        """ Initialize and prunes weights if needed. """
+        # Initialize weights
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """ Initialize the weights.
+        """
+        if isinstance(module, (nn.Linear, nn.Embedding, Conv1D)):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
+            if isinstance(module, (nn.Linear, Conv1D)) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+    def get_input_embeddings(self):
+        return self.wte
+
+    def set_input_embeddings(self, new_embeddings):
+        self.wte = new_embeddings
+
+    def _prune_heads(self, heads_to_prune):
+        """ Prunes heads of the model.
+            heads_to_prune: dict of {layer_num: list of heads to prune in this layer}
+        """
+        for layer, heads in heads_to_prune.items():
+            self.h[layer].attn.prune_heads(heads)
+
+    def forward(
+            self,
+            input_ids=None,  # the target sequence
+            past=None,
+            self_attention_mask=None,
+            cross_attention_mask=None,
+            token_type_ids=None,
+            position_ids=None,
+            head_mask=None,
+            enc_seq=None,  # the encoder sequence
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            labels=None
+    ):
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        use_cache = use_cache if use_cache is not None else self.config.use_cache
+
+        input_shape = input_ids.size()
+        batch_size = input_ids.shape[0]
+
+        if past is None:
+            past_length = 0
+            past = [None] * len(self.h)
+        else:
+            past_length = past[0][0].size(-2)
+
+        if input_ids is not None:
+            if self.config.separate:
+                inputs_embeds = 0.
+                for ii, embedder in enumerate(self.wte):
+                    inputs_embeds += embedder(input_ids[:, :, ii].contiguous())
+                    # print('adding', ii)
+
+            else:
+                id_embeds = 0
+                inputs_embeds = self.wte(input_ids)
+
+        if inputs_embeds.dim() == 4:
+            print(inputs_embeds.shape)
+            inputs_embeds = inputs_embeds.sum(dim=-2)
+
+        if token_type_ids is not None:
+            token_type_embeds = self.wte(token_type_ids)
+        else:
+            token_type_embeds = 0
+
+        if self.pos_id:
+            if position_ids is None:
+                n_ctx = inputs_embeds.shape[1]
+                bs = inputs_embeds.shape[0]
+                position_ids = torch.arange(0, n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1,
+                                                                                                             -1).repeat(
+                    bs, 1)
+                # type_ids = torch.arange(n_ctx, dtype=torch.long, device=inputs_embeds.device).reshape(1, -1).repeat(bs,
+                                                                                                                  #  1) % self.config.n_types
+            # print(pos_tokens.shape)
+            pos_embeds = self.pde(position_ids)
+            type_embeds = 0 #self.wtte(type_ids)
+            # print('from cond_enc, pos_id: pos_embeds, type_embeds', pos_embeds.shape, type_embeds.shape)
+            inputs_embeds = inputs_embeds + pos_embeds + type_embeds
+
+        # print('from cond_enc after summing', inputs_embeds.shape)
+
+        hidden_states = inputs_embeds
+        hidden_states = self.drop(hidden_states)
+
+        if self.passthrough:
+            return (hidden_states,)
+
+        # print(enc_seq)
+        # (N , T) + (dim)
+        # output_shape = input_shape + (hidden_states.size(-1),)
+
+        enc_seq_transposed = enc_seq.transpose(0, 1)  # S, N, E
+        hidden_states = hidden_states.transpose(0, 1)  # T, N, E
+        presents = ()
+        all_attentions = []
+        all_hidden_states = ()
+        for i, (block, layer_past) in enumerate(zip(self.h, past)):
+            if output_hidden_states:
+                all_hidden_states = all_hidden_states + (hidden_states.view(*output_shape),)
+
+            outputs = block(enc=enc_seq_transposed,
+                            dec=hidden_states,
+                            self_attn_mask=self_attention_mask,
+                            cross_attn_mask=cross_attention_mask)
+            # print(outputs[0])
+            # print(type(outputs))
+            # sys.exit()
+
+            hidden_states, present = outputs[:2]
+            if use_cache is True:
+                presents = presents + (present,)
+
+            if output_attentions:
+                all_attentions.append(outputs[2])
+
+        # untranspose
+        hidden_states = hidden_states.transpose(0, 1)  # N, T, E
+        hidden_states = self.ln_f(hidden_states)
+
+        # hidden_states = hidden_states.view(*output_shape)
+        # Add last hidden state
+        if output_hidden_states:
+            all_hidden_states = all_hidden_states + (hidden_states,)
+
+        outputs = (hidden_states,)
+        if use_cache is True:
+            outputs = outputs + (presents,)
+        if output_hidden_states:
+            outputs = outputs + (all_hidden_states,)
+        if output_attentions:
+            # let the number of heads free (-1) so we can extract attention even after head pruning
+            attention_output_shape = input_shape[:-1] + (-1,) + all_attentions[0].shape[-2:]
+            all_attentions = tuple(t.view(*attention_output_shape) for t in all_attentions)
+            outputs = outputs + (all_attentions,)
+
+        hidden_states = self.lm_head(hidden_states)
+
+        return (hidden_states,)
+
 class GraphGPTModel(nn.Module):
     def __init__(self, enc_config, dec_config):
         super().__init__()
@@ -1096,6 +1302,64 @@ class EncDecGPTModel(nn.Module):
 
         return outputs
 
+class ConstrGPTModel(nn.Module):
+    def __init__(self, constr_config, enc_config, dec_config):
+        super().__init__()
+        self.constr = GPT2Encoder(constr_config)
+        self.encoder = GPT2ConditionalEncoder(enc_config)
+        self.decoder = GPT2Decoder(dec_config)
+        self.embed_dim = enc_config.n_embd
+
+
+    def forward(self,
+                constr_seq,
+                enc_seq,
+                dec_seq,
+                constr_attn_mask=None,
+                enc_attn_mask=None,
+                dec_attn_mask=None,
+                labels=None):
+
+        constr_embed = self.constr(input_ids=constr_seq,
+                                   attention_mask=constr_attn_mask)[0]
+
+        enc_embed = self.encoder(input_ids=enc_seq,
+                                 self_attention_mask=enc_attn_mask,
+                                 cross_attention_mask=constr_attn_mask,
+                                 enc_seq=constr_embed)[0]
+
+        # print(constr_embed.shape, enc_embed.shape)
+
+        enc_embed *= enc_attn_mask[..., None]
+
+        dec_seq = dec_seq.unsqueeze(-1)
+        # print(dec_seq.shape)
+        indexer = dec_seq.repeat((1, 1, self.embed_dim)).long()
+
+
+        # print('from constr: indexer, enc_embed', indexer.shape, enc_embed.shape)
+        dec_embed = torch.gather(enc_embed, 1, indexer)
+
+        pointers = self.decoder(inputs_embeds=dec_embed,
+                                attention_mask=dec_attn_mask)[0]
+
+        inner_prod = torch.matmul(pointers, enc_embed.permute(0, 2, 1))
+
+        if labels is not None:
+            logits = inner_prod[:, :-1, :].contiguous()
+            labels = labels[:, 1:].contiguous()
+
+            loss_fct = CrossEntropyLoss()
+            # print(logits.size())
+            loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        else:
+            loss = 0
+
+        # print(inner_prod.shape)
+        return loss, inner_prod
+
+
 
 if __name__ == '__main__':
 
@@ -1111,7 +1375,22 @@ if __name__ == '__main__':
         is_causal=False,
         is_encoder=False,
         n_types=5,
-        pos_id=True
+        pos_id=True,
+        separate=False
+    )
+
+    enc_config = GPT2Config(
+        vocab_size=65,
+        n_positions=200,
+        n_ctx=200,
+        n_embd=264,
+        n_layer=12,
+        n_head=12,
+        is_causal=False,
+        is_encoder=False,
+        n_types=3,
+        pos_id=True,
+        separate=True
     )
 
     dec_config = GPT2Config(
@@ -1127,26 +1406,47 @@ if __name__ == '__main__':
         dec_n=100
     )
 
-    model = EncDecGPTModel(config, dec_config)
+    # constr_seq,
+    # enc_seq,
+    # dec_seq,
+    # constr_attn_mask = None,
+    # enc_attn_mask = None,
+    # dec_attn_mask = None,
+    # labels = None):
+
+    model = ConstrGPTModel(config, enc_config, dec_config)
 
     bs = 3
     node_ids = torch.arange(200, dtype=torch.long) % 63
     node_ids = node_ids.repeat((bs, 1))
 
-    node_ids2 = torch.arange(100, dtype=torch.long) % 63
-    node_ids2 = node_ids2.repeat((bs, 1))
+    node_ids2 = torch.arange(150, dtype=torch.long) % 63
+    node_ids2 = node_ids2.repeat((bs, 1)).reshape(bs, 150, 1).repeat((1, 1, 3))
+    print(node_ids2.shape)
 
-    cross_attn_mask = torch.zeros((3, 200))
-    cross_attn_mask[:, :100] = 1
-    self_attn_mask = torch.zeros((3, 100))
-    self_attn_mask[:, :150] = 1
+    node_ids3 = torch.arange(100, dtype=torch.long) % 63
+    node_ids3 = node_ids3.repeat((bs, 1))
+
+
+    constr_attn_mask = torch.zeros((3, 200))
+    enc_attn_mask = torch.zeros((3, 150))
+    dec_attn_mask = torch.zeros((3, 100))
+
+    constr_attn_mask[:, :100] = 1
+    enc_attn_mask[:, :150] = 1
+    dec_attn_mask[:, :150] = 1
 
     # print(node_ids.shape)
-    ret_tuple = model(enc_seq=node_ids,
-                   dec_seq=node_ids2,
-                   enc_attn_mask=cross_attn_mask,
-                   dec_attn_mask=self_attn_mask,
-                   labels=node_ids2)
+    ret_tuple = model(
+                    constr_seq=node_ids,
+                    enc_seq=node_ids2,
+                   dec_seq=node_ids3,
+                   constr_attn_mask=constr_attn_mask,
+                   enc_attn_mask=enc_attn_mask,
+                   dec_attn_mask=dec_attn_mask,
+                   labels=node_ids3)
+
+    # print(ret_tuple)
 
     # print(ret_tuple[0].shape, ret_tuple[1])
     # print(ret_tuple[0])
@@ -1218,3 +1518,4 @@ if __name__ == '__main__':
     #                attention_mask=attention_mask)
     #
     # print(output[0].shape)
+
