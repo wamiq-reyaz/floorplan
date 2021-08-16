@@ -43,9 +43,10 @@ if __name__ == '__main__':
     from tqdm import tqdm
 
     result_sets = [
-        {'in_path': '../data/results/furniture/6_tuple_furn/6_tuple', 'out_path': '../data/results/furniture/6_tuple_rnngraph/6_tuple', 'r': 6},
-        {'in_path': '../data/results/furniture/stylegan_furn/stylegan', 'out_path': '../data/results/furniture/stylegan_rnngraph/stylegan', 'r': 6},
-        {'in_path': '/home/guerrero/scratch_space/floorplan/gt_furn/gt', 'out_path': '/home/guerrero/scratch_space/floorplan/gt_rnngraph/gt', 'r': 6},
+        # {'in_path': '../data/results/furniture/6_tuple_furn/6_tuple', 'out_path': '../data/results/furniture/6_tuple_rnngraph/6_tuple', 'r': 6},
+        # {'in_path': '../data/results/furniture/stylegan_furn/stylegan', 'out_path': '../data/results/furniture/stylegan_rnngraph/stylegan', 'r': 6},
+        {'in_path': '../data/results/furniture/procedural_furn/procedural', 'out_path': '../data/results/furniture/procedural_rnngraph/procedural', 'r': 6},
+        # {'in_path': '/home/guerrero/scratch_space/floorplan/gt_furn/gt', 'out_path': '/home/guerrero/scratch_space/floorplan/gt_rnngraph/gt', 'r': 6},
     ]
     
     for rsi, result_set in enumerate(result_sets):
@@ -57,7 +58,7 @@ if __name__ == '__main__':
         print(f'result set [{rsi+1}/{len(result_sets)}]')
     
         # read the boxes and edges of all floor plans in the input directory
-        sample_names = get_sample_names(base_path=in_path)
+        sample_names = get_sample_names(format='hdf5_set', base_path=in_path)
 
         batch_size = 100
         batch_count = math.ceil(len(sample_names) / batch_size)
@@ -67,7 +68,7 @@ if __name__ == '__main__':
             batch_sample_names = sample_names[samples_from:samples_to]
 
             _, furn_bboxes, furn_neighbor_edges, furn_masks, room_bboxes, room_masks = load_furniture(
-                base_path=in_path, sample_names=batch_sample_names)
+                format='hdf5_set', base_path=in_path, sample_names=batch_sample_names)
 
             furn_neighbor_edges = []
             for si, sample_name in enumerate(batch_sample_names):

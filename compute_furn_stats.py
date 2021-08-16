@@ -755,7 +755,7 @@ def compute_egraph_set_stats(out_filename, in_path, label_count, exclude_types):
 
     set_stats = None
 
-    sample_names = get_sample_names(base_path=in_path)
+    sample_names = get_sample_names(format='hdf5_set', base_path=in_path)
 
     batch_size = 100
     batch_count = math.ceil(len(sample_names) / batch_size)
@@ -765,7 +765,7 @@ def compute_egraph_set_stats(out_filename, in_path, label_count, exclude_types):
         batch_sample_names = sample_names[samples_from:samples_to]
 
         _, furn_bboxes, furn_neighbor_edges, _, room_bboxes, _ = load_furniture(
-            base_path=in_path, sample_names=batch_sample_names)
+            format='hdf5_set', base_path=in_path, sample_names=batch_sample_names)
 
         stats = egraph_stats(
             node_type=[bboxes[:, 0] for bboxes in furn_bboxes],
@@ -856,9 +856,10 @@ if __name__ == '__main__':
     if compute_stats:
 
         result_sets = [
-            {'in_path': '../data/results/furniture/6_tuple_rnngraph/6_tuple', 'out_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
-            {'in_path': '../data/results/furniture/stylegan_rnngraph/stylegan', 'out_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
-            {'in_path': '/home/guerrero/scratch_space/floorplan/gt_rnngraph/gt', 'out_filename': '../data/results/furniture/gt_stats/stats.npy'},
+            # {'in_path': '../data/results/furniture/6_tuple_rnngraph/6_tuple', 'out_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
+            # {'in_path': '../data/results/furniture/stylegan_rnngraph/stylegan', 'out_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
+            {'in_path': '../data/results/furniture/procedural_rnngraph/procedural', 'out_filename': '../data/results/furniture/procedural_stats/stats.npy'},
+            # {'in_path': '/home/guerrero/scratch_space/floorplan/gt_rnngraph/gt', 'out_filename': '../data/results/furniture/gt_stats/stats.npy'},
         ]
 
         for rsi, result_set in enumerate(result_sets):
@@ -875,8 +876,9 @@ if __name__ == '__main__':
     if compute_stat_distances:
 
         stat_dist_sets = [
-            {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
-            {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/6_tuple_stats/stats.npy'},
+            # {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/stylegan_stats/stats.npy'},
+            {'real_stat_filename': '../data/results/furniture/gt_stats/stats.npy', 'fake_stat_filename': '../data/results/furniture/procedural_stats/stats.npy'},
         ]
 
         for rsi, stat_dist_set in enumerate(stat_dist_sets):

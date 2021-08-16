@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
 
 
-    dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=, drop_last=True)
+    dloader = DataLoader(dset, batch_size=args.bs, num_workers=10, shuffle=True, drop_last=True)
 
 
 

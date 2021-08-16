@@ -189,8 +189,8 @@ def load_boxes(sample_names, box_dir, door_dir=None, wall_dir=None, suffix='', o
             box_file_name = os.path.join(box_dir, f'{sample_name}{suffix}_xyhw.npy')
 
             door_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}_doorlist_all.pkl')
-            if door_type == 2:
-                door_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}_doorlist_all2.pkl')
+            # if door_type == 2:
+            #     door_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}_doorlist_all2.pkl')
 
             wall_edges_filename = os.path.join(box_dir, f'{sample_name}{suffix}walllist_all.pkl')
 

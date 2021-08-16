@@ -30,7 +30,9 @@ result_sets = [
     # {'box_dir': '../data/results/3_tuple_cond_on_rplan/nodes_0.9_merged', 'door_dir': '../data/results/3_tuple_cond_on_rplan/doors_0.9_merged', 'wall_dir': '../data/results/3_tuple_cond_on_rplan/walls_0.9_merged', 'output_list': '../data/results/3_tuple_cond_on_rplan/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
     # {'box_dir': '../data/results/3_tuple_cond_on_lifull/nodes_0.9', 'door_dir': '../data/results/3_tuple_cond_on_lifull/doors_0.9', 'wall_dir': '../data/results/3_tuple_cond_on_lifull/walls_0.9', 'output_list': '../data/results/3_tuple_cond_on_lifull/test_nodes_0.9_doors_0.9_walls_0.9.txt', 'add_exterior': True},
 
-    {'box_dir': '../data/results/housegan_on_lifull/boxes', 'door_dir': '../data/results/housegan_on_lifull/doors', 'wall_dir': '../data/results/housegan_on_lifull/walls', 'output_list': '../data/results/housegan_on_lifull/all.txt', 'add_exterior': True, 'only_boxes': True, 'coord_type': 'absolute_minmax_corner'},
+    # {'box_dir': '../data/results/housegan_on_lifull/boxes', 'door_dir': '../data/results/housegan_on_lifull/doors', 'wall_dir': '../data/results/housegan_on_lifull/walls', 'output_list': '../data/results/housegan_on_lifull/all.txt', 'add_exterior': True, 'only_boxes': True, 'coord_type': 'absolute_minmax_corner'},
+    {'box_dir': '../data/results/5_tuple_bedroom_cond_on_rplan/nodes/nodes_0.9_0.9', 'door_dir': '../data/results/5_tuple_bedroom_cond_on_rplan/doors', 'wall_dir': '../data/results/5_tuple_bedroom_cond_on_rplan/walls', 'output_list': '../data/results/5_tuple_bedroom_cond_on_rplan/all.txt'},
+    {'box_dir': '../data/results/5_tuple_balcony_cond_on_rplan/nodes/nodes_0.9_0.9', 'door_dir': '../data/results/5_tuple_balcony_cond_on_rplan/doors', 'wall_dir': '../data/results/5_tuple_balcony_cond_on_rplan/walls', 'output_list': '../data/results/5_tuple_balcony_cond_on_rplan/all.txt'},
 ]
 
 max_sample_count = 1000
